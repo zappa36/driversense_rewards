@@ -7,6 +7,10 @@ A gamified rewards dashboard for delivery drivers in the Berlin Nord hub:
 drivers earn money for field reporting (fresh door codes, voice notes, photos of
 safe-drop points) and cash it out with their salary run.
 
+**Live demo:** https://zappa36.github.io/driversense_rewards/ — deployed to
+GitHub Pages automatically on every push to `main` (see
+`.github/workflows/pages.yml`).
+
 ## Screens
 
 - **Dashboard** — balance, cashout progress, claimable rewards, featured
