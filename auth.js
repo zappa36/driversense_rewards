@@ -27,12 +27,19 @@ const AUTH = (() => {
     },
   };
 
+  /* When Supabase is configured (config.js + db.js), the admin role is a
+   * real authenticated session and the demo code gate is bypassed. */
+  const supa = () => typeof DB !== 'undefined' && DB.enabled;
+
   return {
-    isAdmin: () => store.get() === 'admin',
+    isAdmin: () => supa() ? DB.hasSession() : store.get() === 'admin',
     signIn(code) {
       if (String(code).trim() === ADMIN_CODE) { store.set('admin'); return true; }
       return false;
     },
-    signOut: () => store.clear(),
+    signOut() {
+      if (supa()) DB.signOut();
+      store.clear();
+    },
   };
 })();

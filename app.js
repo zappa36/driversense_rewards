@@ -29,8 +29,9 @@ const props = {
  * deep-link into Street View / Google Maps. */
 const GMAPS_KEY = params.get('gkey') || window.GMAPS_KEY || '';
 
-const TARGET = 25;
-const MULT = props.weekendBoost ? 1.5 : 1;
+/* Mutable when Supabase settings load (see applySettings). */
+let TARGET = 25;
+let MULT = props.weekendBoost ? 1.5 : 1;
 
 /* ---------- state ---------- */
 const state = {
@@ -56,14 +57,16 @@ const ACCENTS = {
   mint: { accent: '#5fe0b4', rgb: '95,224,180', sky: 'linear-gradient(180deg,#0e1e26 0%,#153a34 62%,#1d4a40 100%)' },
 };
 
-const SPECIAL = {
+/* SPECIAL/CHALLENGES/GOALS are the built-in demo set; when Supabase is
+ * configured they are replaced by the planner-published library. */
+let SPECIAL = {
   id: 'c0', tone: 'gold', title: 'District Master: Prenzlauer Berg', value: 15.00, xp: 400,
   zone: 'PRENZLAUER BERG', left: 'ENDS SUN 24:00', tier: 'EPIC', unit: '12 STOPS', addr: 'Prenzlauer Berg',
   lat: 52.53688, lng: 13.420892,
   desc: 'Own your home zone this weekend — leave every stop verified, coded and noted. Top payout of the week, and the whole hub sees it.',
 };
 
-const CHALLENGES = [
+let CHALLENGES = [
   { id: 'c1', tone: 'gold', title: 'Mystery Stop Hunter', value: 8.50, xp: 180, zone: 'PRENZLAUER BERG', left: '3D LEFT', tier: 'MEDIUM', unit: '5 STOPS', addr: 'Rykestraße 21', lat: 52.53688, lng: 13.420892, desc: 'Refresh field notes at five unverified stops on tomorrow’s route.' },
   { id: 'c2', tone: 'cyan', title: 'Access Code Collector', value: 5.20, xp: 120, zone: 'MITTE', left: '5D LEFT', tier: 'MEDIUM', unit: '8 CODES', addr: 'Rosenthaler Str. 40', lat: 52.524001, lng: 13.402501, desc: 'Confirm door codes at eight buildings around Rosenthaler Platz.' },
   { id: 'c3', tone: 'mint', title: 'New Zone Scout', value: 12.00, xp: 240, zone: 'WEISSENSEE', left: '6D LEFT', tier: 'EPIC', unit: '6 RIDES', addr: 'Berliner Allee 250', lat: 52.559737, lng: 13.46724, desc: 'First rides in Weißensee — map access where the system is blind.' },
@@ -72,9 +75,9 @@ const CHALLENGES = [
   { id: 'c6', tone: 'gold', title: 'Loading Dock Mapper', value: 9.00, xp: 200, zone: 'GESUNDBRUNNEN', left: '7D LEFT', tier: 'MEDIUM', unit: '4 DOCKS', addr: 'Badstraße 20', lat: 52.55178, lng: 13.383148, desc: 'Chart dock access and waiting rules at four retail stops.' },
 ];
 
-const ALL_CHALLENGES = Object.fromEntries([SPECIAL, ...CHALLENGES].map(c => [c.id, c]));
+let ALL_CHALLENGES = Object.fromEntries([SPECIAL, ...CHALLENGES].map(c => [c.id, c]));
 
-const GOALS = { c0: 12, c1: 5, c2: 8, c3: 6, c4: 10, c5: 6, c6: 4 };
+let GOALS = { c0: 12, c1: 5, c2: 8, c3: 6, c4: 10, c5: 6, c6: 4 };
 
 const PATCHES = {
   c0: 'left:26%;top:14%;width:48%;height:54%;',
@@ -168,6 +171,11 @@ function stopTagStyle(tag) {
   return `flex:none;padding:3px 9px;border-radius:6px;background:${bg};${MONO}font-size:9.5px;letter-spacing:.1em;color:${col};`;
 }
 
+/* Effective multiplier for one challenge: built-ins have no boost flag
+ * (undefined -> eligible, matching the original design); Supabase rows
+ * carry explicit eligibility from the studio. */
+const chalMult = c => (c.boost === false ? 1 : MULT);
+
 /* Challenge view-model: state flags, payout labels, patch + tier styles. */
 function chalVm(c) {
   const a = ACCENTS[c.tone];
@@ -179,10 +187,10 @@ function chalVm(c) {
   return {
     ...c, ...a,
     tierStyle: tierChipStyle(c.tier),
-    patchStyle: `position:absolute;z-index:2;display:flex;align-items:center;justify-content:center;border:1.5px dashed rgba(${a.rgb},.65);border-radius:6px;background:repeating-linear-gradient(45deg,rgba(${a.rgb},.12) 0 6px,rgba(${a.rgb},.02) 6px 12px);${PATCHES[c.id] || PATCHES.c1}`,
+    patchStyle: `position:absolute;z-index:2;display:flex;align-items:center;justify-content:center;border:1.5px dashed rgba(${a.rgb},.65);border-radius:6px;background:repeating-linear-gradient(45deg,rgba(${a.rgb},.12) 0 6px,rgba(${a.rgb},.02) 6px 12px);${c.patch || PATCHES[c.id] || PATCHES.c1}`,
     meta: `${c.zone} · ${c.unit} · ${c.left}`,
-    xpLabel: '+' + Math.round(c.xp * MULT) + ' XP',
-    rewardLabel: fmt(c.value * MULT),
+    xpLabel: '+' + Math.round(c.xp * chalMult(c)) + ' XP',
+    rewardLabel: fmt(c.value * chalMult(c)),
     showStart: !started,
     showProg: started && !complete,
     showClaim: complete && !claimed,
@@ -211,8 +219,9 @@ function computeVm() {
   const openClaims = claims.filter(c => c.claimable).length;
 
   const challenges = CHALLENGES.map(chalVm);
-  const sp = chalVm(SPECIAL);
-  const trackingCount = [SPECIAL, ...CHALLENGES]
+  const sp = SPECIAL ? chalVm(SPECIAL) : null;
+  const liveCount = CHALLENGES.length + (SPECIAL ? 1 : 0);
+  const trackingCount = [SPECIAL, ...CHALLENGES].filter(Boolean)
     .filter(c => s.started[c.id] && !s.claimed[c.id] && (s.prog[c.id] || 0) < (GOALS[c.id] || 5)).length;
 
   const zoneRow = (z, i, arr) => ({
@@ -268,7 +277,7 @@ function computeVm() {
       : s.balance >= TARGET ? 'Threshold reached — cash out whenever you like.'
         : `Claim ${fmt(TARGET - s.balance)} more to unlock the next cashout.`,
     claimCountLabel: `${openClaims} OPEN`,
-    chalStatLabel: `${CHALLENGES.length + 1} LIVE · ${trackingCount} TRACKING`,
+    chalStatLabel: `${liveCount} LIVE · ${trackingCount} TRACKING`,
     claims, featured: challenges.slice(0, 3), challenges, sp, zonesHome, zoneList, sel, shop, methods, history,
     seasonTotal: fmt(paidTotal),
     seasonCount: String(paidHistory.length),
@@ -434,12 +443,12 @@ function renderDashboard(vm) {
     <div style="margin-top:56px;">
       <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:18px;">
         <span style="${COND}font-weight:700;font-size:22px;">Live challenges</span>
-        ${vm.boostOn ? `<span style="${MONO}font-size:11px;color:#ffd95e;">WEEKEND ×1.5 UNTIL SUN</span>` : ''}
+        ${vm.boostOn ? `<span style="${MONO}font-size:11px;color:#ffd95e;">WEEKEND ×${MULT} UNTIL SUN</span>` : ''}
         <span data-action="nav" data-page="challenges" style="margin-left:auto;cursor:pointer;${MONO}font-size:11px;letter-spacing:.08em;color:#3cc0e0;">VIEW ALL →</span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;">
+      ${vm.featured.length ? `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;">
         ${vm.featured.map(renderFeaturedCard).join('')}
-      </div>
+      </div>` : `<div style="${CARD}padding:26px;font-size:13.5px;color:#7b8799;">No live challenges right now — check back soon.</div>`}
     </div>
 
     <div style="margin-top:56px;">
@@ -570,13 +579,13 @@ function renderChallenges(vm) {
       </div>
       <div style="flex:none;text-align:right;padding-bottom:4px;">
         <div style="${MONO}font-size:11px;color:#6f7c8e;">${vm.chalStatLabel}</div>
-        ${vm.boostOn ? `<div style="margin-top:5px;${MONO}font-size:11px;color:#ffd95e;">WEEKEND ×1.5 ON ALL PAYOUTS · ENDS SUN 24:00</div>` : ''}
+        ${vm.boostOn ? `<div style="margin-top:5px;${MONO}font-size:11px;color:#ffd95e;">WEEKEND ×${MULT} ON ALL PAYOUTS · ENDS SUN 24:00</div>` : ''}
       </div>
     </div>
-    ${renderSpecialBanner(vm)}
-    <div style="margin-top:18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;">
+    ${vm.sp ? renderSpecialBanner(vm) : ''}
+    ${vm.challenges.length ? `<div style="margin-top:18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;">
       ${vm.challenges.map(renderChallengeCard).join('')}
-    </div>
+    </div>` : (vm.sp ? '' : `<div style="margin-top:18px;${CARD}padding:26px;font-size:13.5px;color:#7b8799;">No live challenges right now — check back soon.</div>`)}
   </div>`;
 }
 
@@ -772,7 +781,7 @@ const actions = {
   'claim-chal'(d) {
     const c = ALL_CHALLENGES[d.id];
     if (!c || state.claimed[c.id]) return;
-    addBalance(c.value * MULT);
+    addBalance(c.value * chalMult(c));
     state.claimed[c.id] = true;
     render();
   },
@@ -817,6 +826,67 @@ root.addEventListener('click', e => {
   if (handler) handler(el.dataset);
 });
 
+/* ---------- Supabase: planner-published challenges + hub rules ---------- */
+const TONE_BY_TIER = { EPIC: 'gold', MEDIUM: 'cyan', EASY: 'mint' };
+const PATCH_POOL = [PATCHES.c1, PATCHES.c2, PATCHES.c3, PATCHES.c4, PATCHES.c5, PATCHES.c6];
+
+function zoneCoords(name) {
+  const z = ZONES.find(z => z.name.toLowerCase() === String(name).toLowerCase());
+  const st = (z || ZONES[0]).stops[0];
+  return { lat: st.lat, lng: st.lng };
+}
+
+/* Map a studio-authored row onto the driver card shape. */
+function toDriverChal(c, i) {
+  const hasCoords = c.lat != null && c.lng != null;
+  const coords = hasCoords ? { lat: c.lat, lng: c.lng } : zoneCoords(c.zone);
+  return {
+    id: c.id, tone: TONE_BY_TIER[c.tier] || 'cyan', title: c.title, value: c.value, xp: c.xp,
+    zone: String(c.zone).toUpperCase(), left: `${c.days}D LEFT`, tier: c.tier,
+    unit: `${c.goal} ${c.unit}`, addr: c.addr || c.zone, desc: c.desc,
+    lat: coords.lat, lng: coords.lng,
+    svLoc: c.addr ? undefined : `${coords.lat},${coords.lng}`,
+    boost: c.boost,
+    patch: PATCH_POOL[i % PATCH_POOL.length],
+  };
+}
+
+function applySettings(L) {
+  if (!params.has('mode')) props.payoutMode = L.mode;
+  if (!params.has('boost')) props.weekendBoost = L.weekendOn;
+  MULT = props.weekendBoost ? L.weekendMult : 1;
+  TARGET = L.cashMin;
+  CLAIM_ROWS[0].v = L.s3;
+  CLAIM_ROWS[2].v = L.s7;
+}
+
+function applyRemoteChallenges(rows) {
+  const live = rows.filter(c => c.status === 'LIVE');
+  GOALS = {};
+  rows.forEach(c => { GOALS[c.id] = c.goal; });
+  if (!live.length) {
+    SPECIAL = null;
+    CHALLENGES = [];
+    ALL_CHALLENGES = {};
+    return;
+  }
+  /* The highest-paying live challenge headlines as the weekend special. */
+  const sorted = [...live].sort((a, b) => b.value * (b.boost ? MULT : 1) - a.value * (a.boost ? MULT : 1));
+  SPECIAL = { ...toDriverChal(sorted[0], 0), left: `${sorted[0].days}D LEFT`, patch: PATCHES.c0 };
+  CHALLENGES = sorted.slice(1).map((c, i) => toDriverChal(c, i));
+  ALL_CHALLENGES = Object.fromEntries([SPECIAL, ...CHALLENGES].map(c => [c.id, c]));
+}
+
 /* ---------- boot ---------- */
 render();
 Object.keys(state.started).forEach(id => tickChal(id));
+
+if (typeof DB !== 'undefined' && DB.enabled) {
+  Promise.all([DB.listChallenges(false), DB.fetchSettings()])
+    .then(([rows, settingsRow]) => {
+      if (settingsRow) applySettings(DB.rowToLogic(settingsRow));
+      if (rows) applyRemoteChallenges(rows.map(DB.rowToChal));
+      render();
+    })
+    .catch(() => { /* offline or misconfigured — keep the built-in demo data */ });
+}

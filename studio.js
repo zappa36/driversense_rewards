@@ -75,8 +75,69 @@ const toggle = (action, on) =>
 let idSeq = Date.now();
 const newId = () => 'c' + (++idSeq);
 
+/* ---------- Supabase sync ---------- */
+let syncStatus = 'synced';
+const SYNC_TEXT = { loading: 'SYNCING…', saving: 'SAVING…', synced: '● SYNCED', error: 'SYNC ERROR — RETRY SAVES ON NEXT EDIT' };
+
+function setSync(s) {
+  syncStatus = s;
+  const el = document.querySelector('[data-sync]');
+  if (el) {
+    el.textContent = SYNC_TEXT[s];
+    el.style.color = s === 'error' ? '#ff8a7a' : s === 'synced' ? '#5fe0b4' : '#8b97a8';
+  }
+}
+
+/* Pull the shared library + rules from Supabase (planner session). */
+async function loadRemote() {
+  if (!DB.enabled) return;
+  setSync('loading');
+  try {
+    const [rows, settingsRow] = await Promise.all([DB.listChallenges(true), DB.fetchSettings()]);
+    if (rows && rows.length) {
+      state.chals = rows.map(DB.rowToChal);
+      if (!state.chals.find(c => c.id === state.selId)) state.selId = state.chals[0].id;
+    }
+    if (settingsRow) state.logic = DB.rowToLogic(settingsRow);
+    syncStatus = 'synced';
+  } catch {
+    syncStatus = 'error';
+  }
+  render();
+}
+
+const saveTimers = new Map();
+function persistChallenge(id, delay = 0) {
+  if (!DB.enabled) return;
+  clearTimeout(saveTimers.get(id));
+  saveTimers.set(id, setTimeout(() => {
+    const c = state.chals.find(x => x.id === id);
+    if (!c) return;
+    setSync('saving');
+    DB.upsertChallenge(DB.chalToRow(c)).then(() => setSync('synced')).catch(() => setSync('error'));
+  }, delay));
+}
+
+function persistDelete(id) {
+  if (!DB.enabled) return;
+  clearTimeout(saveTimers.get(id));
+  setSync('saving');
+  DB.deleteChallenge(id).then(() => setSync('synced')).catch(() => setSync('error'));
+}
+
+let logicTimer = null;
+function persistLogic() {
+  if (!DB.enabled) return;
+  clearTimeout(logicTimer);
+  logicTimer = setTimeout(() => {
+    setSync('saving');
+    DB.saveSettings(DB.logicToRow(state.logic)).then(() => setSync('synced')).catch(() => setSync('error'));
+  }, 300);
+}
+
 /* ---------- admin lock screen ---------- */
 let authError = false;
+let signingIn = false;
 
 function renderLockScreen() {
   return `
@@ -92,11 +153,19 @@ function renderLockScreen() {
       <form data-form="unlock" style="width:400px;${CARD}padding:34px;">
         <div style="${MONO}font-size:10px;letter-spacing:.2em;color:#6f7c8e;">PLANNER CONSOLE · RESTRICTED</div>
         <div style="margin-top:12px;${COND}font-weight:700;font-size:27px;line-height:1.1;">Admin access required</div>
-        <p style="margin:10px 0 0;font-size:13.5px;line-height:1.55;color:#94a1b2;">Creating and editing challenges is limited to network planners. Enter the planner code to continue.</p>
+        <p style="margin:10px 0 0;font-size:13.5px;line-height:1.55;color:#94a1b2;">Creating and editing challenges is limited to network planners. ${DB.enabled ? 'Sign in with your planner account to continue.' : 'Enter the planner code to continue.'}</p>
+        ${DB.enabled ? `
+        <div style="margin-top:22px;${LABEL}">EMAIL</div>
+        <input id="admin-email" type="email" autocomplete="username" autofocus style="${FIELD}padding:12px 13px;font-family:'Saira',sans-serif;font-size:14px;">
+        <div style="margin-top:14px;${LABEL}">PASSWORD</div>
+        <input id="admin-pass" type="password" autocomplete="current-password" style="${FIELD}padding:12px 13px;${MONO}font-size:14px;">
+        ${authError ? `<div style="margin-top:9px;${MONO}font-size:10px;letter-spacing:.08em;color:#ff8a7a;">SIGN-IN FAILED — CHECK EMAIL AND PASSWORD</div>` : ''}
+        ` : `
         <div style="margin-top:22px;${LABEL}">ADMIN CODE</div>
         <input id="admin-code" type="password" inputmode="numeric" autocomplete="off" autofocus style="${FIELD}padding:12px 13px;${MONO}font-size:15px;letter-spacing:.3em;">
         ${authError ? `<div style="margin-top:9px;${MONO}font-size:10px;letter-spacing:.08em;color:#ff8a7a;">WRONG CODE — ASK YOUR HUB LEAD FOR PLANNER ACCESS</div>` : ''}
-        <button type="submit" style="display:block;width:100%;margin-top:16px;padding:12px;border-radius:11px;border:none;background:linear-gradient(180deg,#63dfae,#2fae7d);${COND}font-weight:700;font-size:13.5px;letter-spacing:.05em;color:#05231a;cursor:pointer;box-shadow:0 10px 22px -10px rgba(47,174,125,.6);">UNLOCK STUDIO</button>
+        `}
+        <button type="submit" ${signingIn ? 'disabled' : ''} style="display:block;width:100%;margin-top:16px;padding:12px;border-radius:11px;border:none;background:linear-gradient(180deg,#63dfae,#2fae7d);${COND}font-weight:700;font-size:13.5px;letter-spacing:.05em;color:#05231a;cursor:pointer;box-shadow:0 10px 22px -10px rgba(47,174,125,.6);${signingIn ? 'opacity:.6;cursor:wait;' : ''}">${signingIn ? 'SIGNING IN…' : 'UNLOCK STUDIO'}</button>
         <a href="index.html" style="display:block;margin-top:16px;text-align:center;${MONO}font-size:10px;letter-spacing:.1em;color:#8b97a8;">BACK TO DRIVER APP</a>
       </form>
     </div>
@@ -114,9 +183,11 @@ function renderTopbar() {
         <span style="${MONO}font-size:10px;letter-spacing:.18em;color:#6f7c8e;">CHALLENGE STUDIO</span>
       </div>
       <div style="flex:1;"></div>
+      ${DB.enabled ? `<span data-sync style="${MONO}font-size:9.5px;letter-spacing:.1em;color:${syncStatus === 'error' ? '#ff8a7a' : syncStatus === 'synced' ? '#5fe0b4' : '#8b97a8'};">${SYNC_TEXT[syncStatus]}</span>
+      <div style="width:1px;height:15px;background:rgba(140,165,200,.2);"></div>` : ''}
       <span style="${MONO}font-size:11.5px;font-weight:700;color:#5fe0b4;">BUDGET ${fmt(projected())} / ${fmt(state.logic.budget)}</span>
       <div style="display:flex;align-items:center;gap:9px;flex:none;">
-        <div style="text-align:right;line-height:1.1;"><div style="${COND}font-weight:600;font-size:13px;">L. Hoffmann</div><div style="${MONO}font-size:9px;letter-spacing:.12em;color:#6f7c8e;">NETWORK PLANNER</div></div>
+        <div style="text-align:right;line-height:1.1;"><div style="${COND}font-weight:600;font-size:13px;">${DB.enabled && DB.userEmail() ? esc(DB.userEmail()) : 'L. Hoffmann'}</div><div style="${MONO}font-size:9px;letter-spacing:.12em;color:#6f7c8e;">NETWORK PLANNER</div></div>
         <img src="assets/profile.png" alt="L. Hoffmann" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:1.5px solid rgba(140,165,200,.35);display:block;">
       </div>
       <div style="width:1px;height:15px;background:rgba(140,165,200,.2);"></div>
@@ -410,8 +481,8 @@ function applyAnimatedWidths() {
 function render() {
   if (!AUTH.isAdmin()) {
     root.innerHTML = renderLockScreen();
-    const code = root.querySelector('#admin-code');
-    if (code) code.focus();
+    const first = root.querySelector(DB.enabled ? '#admin-email' : '#admin-code');
+    if (first) first.focus();
     return;
   }
 
@@ -444,7 +515,10 @@ function render() {
 /* ---------- state transitions ---------- */
 function updSel(key, value) {
   const c = sel();
-  if (c) c[key] = value;
+  if (c) {
+    c[key] = value;
+    persistChallenge(c.id, key === 'title' || key === 'desc' ? 600 : 0);
+  }
   render();
 }
 
@@ -459,12 +533,15 @@ const clickActions = {
     const copy = { ...src, id: newId(), title: src.title + ' (copy)', status: 'DRAFT' };
     state.chals.push(copy);
     state.selId = copy.id;
+    persistChallenge(copy.id);
     render();
   },
   archive() {
     if (state.chals.length < 2) return;
-    state.chals = state.chals.filter(c => c.id !== state.selId);
+    const gone = state.selId;
+    state.chals = state.chals.filter(c => c.id !== gone);
     state.selId = state.chals[0].id;
+    persistDelete(gone);
     render();
   },
   new() {
@@ -472,11 +549,12 @@ const clickActions = {
     state.chals.push(fresh);
     state.selId = fresh.id;
     state.tab = 'chal';
+    persistChallenge(fresh.id);
     render();
   },
-  'mode-euro'() { state.logic.mode = 'euro'; render(); },
-  'mode-points'() { state.logic.mode = 'points'; render(); },
-  'toggle-wk'() { state.logic.weekendOn = !state.logic.weekendOn; render(); },
+  'mode-euro'() { state.logic.mode = 'euro'; persistLogic(); render(); },
+  'mode-points'() { state.logic.mode = 'points'; persistLogic(); render(); },
+  'toggle-wk'() { state.logic.weekendOn = !state.logic.weekendOn; persistLogic(); render(); },
   signout() { AUTH.signOut(); authError = false; render(); },
 };
 
@@ -489,15 +567,15 @@ const changeActions = {
   days: v => updSel('days', Math.max(1, num(v, true))),
   value: v => updSel('value', num(v)),
   xp: v => updSel('xp', num(v, true)),
-  wkmult: v => { state.logic.weekendMult = parseFloat(v); render(); },
-  s3: v => { state.logic.s3 = num(v); render(); },
-  s7: v => { state.logic.s7 = num(v); render(); },
-  s14: v => { state.logic.s14 = num(v); render(); },
-  cashmin: v => { state.logic.cashMin = num(v); render(); },
-  dailycap: v => { state.logic.dailyCap = num(v); render(); },
-  autoconf: v => { state.logic.autoConf = Math.min(100, num(v, true)); render(); },
-  phototier: v => { state.logic.photoTier = v; render(); },
-  budget: v => { state.logic.budget = num(v); render(); },
+  wkmult: v => { state.logic.weekendMult = parseFloat(v); persistLogic(); render(); },
+  s3: v => { state.logic.s3 = num(v); persistLogic(); render(); },
+  s7: v => { state.logic.s7 = num(v); persistLogic(); render(); },
+  s14: v => { state.logic.s14 = num(v); persistLogic(); render(); },
+  cashmin: v => { state.logic.cashMin = num(v); persistLogic(); render(); },
+  dailycap: v => { state.logic.dailyCap = num(v); persistLogic(); render(); },
+  autoconf: v => { state.logic.autoConf = Math.min(100, num(v, true)); persistLogic(); render(); },
+  phototier: v => { state.logic.photoTier = v; persistLogic(); render(); },
+  budget: v => { state.logic.budget = num(v); persistLogic(); render(); },
 };
 
 root.addEventListener('click', e => {
@@ -519,9 +597,22 @@ root.addEventListener('change', e => {
   if (key && changeActions[key]) changeActions[key](e.target.value);
 });
 
-root.addEventListener('submit', e => {
-  if (e.target.dataset && e.target.dataset.form === 'unlock') {
-    e.preventDefault();
+root.addEventListener('submit', async e => {
+  if (!e.target.dataset || e.target.dataset.form !== 'unlock') return;
+  e.preventDefault();
+  if (DB.enabled) {
+    if (signingIn) return;
+    const email = root.querySelector('#admin-email');
+    const pass = root.querySelector('#admin-pass');
+    signingIn = true;
+    const btn = e.target.querySelector('button[type="submit"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'SIGNING IN…'; }
+    const ok = await DB.signIn(email ? email.value : '', pass ? pass.value : '');
+    signingIn = false;
+    authError = !ok;
+    if (ok) await loadRemote();
+    else render();
+  } else {
     const code = root.querySelector('#admin-code');
     authError = !AUTH.signIn(code ? code.value : '');
     render();
@@ -530,3 +621,4 @@ root.addEventListener('submit', e => {
 
 /* ---------- boot ---------- */
 render();
+if (DB.enabled && AUTH.isAdmin()) loadRemote();

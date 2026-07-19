@@ -61,19 +61,42 @@ The design's props are exposed as URL query parameters:
 
 Example: `index.html?mode=points&boost=0&streak=9`
 
-## Roles & access
+## Connecting to Supabase
 
-Creating and editing challenges requires the **admin role**. The studio
-(`challenge-studio.html`) opens on a lock screen; entering the planner code
-(**`1184`** — demo value, defined in `auth.js`) stores the admin role in the
-browser's localStorage. Admins get a "PLANNER CONSOLE →" link in the driver
-app's footer and a SIGN OUT link in the studio topbar.
+With a (free) Supabase project, the planner console and the driver app share
+one real backend: challenges a planner publishes appear in every driver's
+browser, reward-logic changes apply hub-wide, and planner access becomes real
+authentication with server-side enforcement (Row Level Security).
 
-> ⚠️ This is **demo-level** access control: the check runs entirely in the
-> browser, so it signals who should be here rather than enforcing it. For real
-> enforcement, put the studio behind a backend or an access layer (e.g.
-> Netlify Identity / password-protected site, Cloudflare Access, or an OAuth
-> proxy) when this moves past the pilot mock.
+Setup, once:
+
+1. Create a project at [supabase.com](https://supabase.com) (free tier is fine).
+2. In the Supabase **SQL editor**, paste and run [`supabase/schema.sql`](supabase/schema.sql).
+   It creates the `challenges` and `settings` tables, the security rules
+   (anonymous visitors read LIVE challenges only; signed-in planners read and
+   write everything), and seeds the demo data.
+3. In **Authentication → Users**, click "Add user" and create your planner
+   account (email + password, "Auto confirm user" on).
+4. In **Project Settings → API**, copy the **Project URL** and the **anon
+   public key** into [`config.js`](config.js), commit, and push.
+
+That's it — the apps detect the configuration automatically:
+
+- The studio lock screen becomes an **email + password sign-in** against
+  Supabase Auth. Every edit write-through-saves (a sync indicator in the
+  topbar shows SAVING…/SYNCED), so the library survives reloads and is shared
+  between planners.
+- The driver app loads **LIVE challenges** and the **reward rules** from the
+  database on every visit. The highest-paying live challenge headlines as the
+  weekend special; publish/unpublish in the studio adds/removes cards in the
+  driver app. Weekend multiplier, cashout minimum, streak amounts, and
+  euro/points mode all follow the studio's Reward logic tab.
+- Drafts and scheduled challenges are **not readable anonymously** — that's
+  enforced by the database, not the browser.
+
+With `config.js` left empty, everything runs in **local demo mode**: hardcoded
+data, and the studio unlocks with the planner code **`1184`** (defined in
+`auth.js`). Demo mode's gate is browser-only and not real security.
 
 ## Google Maps & Street View
 
@@ -117,7 +140,10 @@ the illustrated skyline automatically.
 | `app.js`                | Driver app: state, data, renderers, interactions   |
 | `challenge-studio.html` | Planner console shell                              |
 | `studio.js`             | Planner console: library/editor, reward logic      |
-| `auth.js`               | Shared demo role gate (admin unlock, localStorage) |
+| `auth.js`               | Role gate: Supabase session or demo code fallback  |
+| `config.js`             | Supabase project URL + anon key (empty = demo mode)|
+| `db.js`                 | Minimal Supabase REST client (auth, challenges, settings) |
+| `supabase/schema.sql`   | Tables, Row Level Security, seed data              |
 | `styles.css`            | Base styles, icon helpers, hover states, keyframes |
 | `fonts.css`             | `@font-face` declarations for the vendored fonts   |
 | `assets/profile.png`    | Avatar                                             |
