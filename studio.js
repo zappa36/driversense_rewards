@@ -75,6 +75,34 @@ const toggle = (action, on) =>
 let idSeq = Date.now();
 const newId = () => 'c' + (++idSeq);
 
+/* ---------- admin lock screen ---------- */
+let authError = false;
+
+function renderLockScreen() {
+  return `
+  <div style="min-height:100vh;display:flex;flex-direction:column;">
+    <div style="position:sticky;top:0;z-index:50;background:rgba(7,13,22,.85);backdrop-filter:blur(10px);border-bottom:1px solid rgba(140,165,200,.1);">
+      <div style="max-width:1180px;margin:0 auto;padding:0 40px;height:64px;display:flex;align-items:center;gap:12px;">
+        <a href="index.html" style="display:inline-flex;align-items:center;gap:5px;${MONO}font-size:11px;letter-spacing:.08em;color:#8b97a8;"><span class="msr" style="font-size:15px;">arrow_back</span>HOME</a>
+        <div style="width:1px;height:15px;background:rgba(140,165,200,.2);"></div>
+        <span style="${MONO}font-size:10px;letter-spacing:.18em;color:#6f7c8e;">CHALLENGE STUDIO</span>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:60px 40px;">
+      <form data-form="unlock" style="width:400px;${CARD}padding:34px;">
+        <div style="${MONO}font-size:10px;letter-spacing:.2em;color:#6f7c8e;">PLANNER CONSOLE · RESTRICTED</div>
+        <div style="margin-top:12px;${COND}font-weight:700;font-size:27px;line-height:1.1;">Admin access required</div>
+        <p style="margin:10px 0 0;font-size:13.5px;line-height:1.55;color:#94a1b2;">Creating and editing challenges is limited to network planners. Enter the planner code to continue.</p>
+        <div style="margin-top:22px;${LABEL}">ADMIN CODE</div>
+        <input id="admin-code" type="password" inputmode="numeric" autocomplete="off" autofocus style="${FIELD}padding:12px 13px;${MONO}font-size:15px;letter-spacing:.3em;">
+        ${authError ? `<div style="margin-top:9px;${MONO}font-size:10px;letter-spacing:.08em;color:#ff8a7a;">WRONG CODE — ASK YOUR HUB LEAD FOR PLANNER ACCESS</div>` : ''}
+        <button type="submit" style="display:block;width:100%;margin-top:16px;padding:12px;border-radius:11px;border:none;background:linear-gradient(180deg,#63dfae,#2fae7d);${COND}font-weight:700;font-size:13.5px;letter-spacing:.05em;color:#05231a;cursor:pointer;box-shadow:0 10px 22px -10px rgba(47,174,125,.6);">UNLOCK STUDIO</button>
+        <a href="index.html" style="display:block;margin-top:16px;text-align:center;${MONO}font-size:10px;letter-spacing:.1em;color:#8b97a8;">BACK TO DRIVER APP</a>
+      </form>
+    </div>
+  </div>`;
+}
+
 /* ---------- sections ---------- */
 function renderTopbar() {
   return `
@@ -91,6 +119,8 @@ function renderTopbar() {
         <div style="text-align:right;line-height:1.1;"><div style="${COND}font-weight:600;font-size:13px;">L. Hoffmann</div><div style="${MONO}font-size:9px;letter-spacing:.12em;color:#6f7c8e;">NETWORK PLANNER</div></div>
         <img src="assets/profile.png" alt="L. Hoffmann" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:1.5px solid rgba(140,165,200,.35);display:block;">
       </div>
+      <div style="width:1px;height:15px;background:rgba(140,165,200,.2);"></div>
+      <span data-action="signout" style="cursor:pointer;${MONO}font-size:10px;letter-spacing:.1em;color:#8b97a8;">SIGN OUT</span>
     </div>
   </div>`;
 }
@@ -378,6 +408,13 @@ function applyAnimatedWidths() {
 }
 
 function render() {
+  if (!AUTH.isAdmin()) {
+    root.innerHTML = renderLockScreen();
+    const code = root.querySelector('#admin-code');
+    if (code) code.focus();
+    return;
+  }
+
   /* Text fields live-update the preview, so remember focus + caret and
    * restore them after the DOM is rebuilt. */
   const active = document.activeElement;
@@ -440,6 +477,7 @@ const clickActions = {
   'mode-euro'() { state.logic.mode = 'euro'; render(); },
   'mode-points'() { state.logic.mode = 'points'; render(); },
   'toggle-wk'() { state.logic.weekendOn = !state.logic.weekendOn; render(); },
+  signout() { AUTH.signOut(); authError = false; render(); },
 };
 
 /* Selects and number fields commit on change. */
@@ -479,6 +517,15 @@ root.addEventListener('input', e => {
 root.addEventListener('change', e => {
   const key = e.target.dataset && e.target.dataset.change;
   if (key && changeActions[key]) changeActions[key](e.target.value);
+});
+
+root.addEventListener('submit', e => {
+  if (e.target.dataset && e.target.dataset.form === 'unlock') {
+    e.preventDefault();
+    const code = root.querySelector('#admin-code');
+    authError = !AUTH.signIn(code ? code.value : '');
+    render();
+  }
 });
 
 /* ---------- boot ---------- */

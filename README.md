@@ -61,6 +61,20 @@ The design's props are exposed as URL query parameters:
 
 Example: `index.html?mode=points&boost=0&streak=9`
 
+## Roles & access
+
+Creating and editing challenges requires the **admin role**. The studio
+(`challenge-studio.html`) opens on a lock screen; entering the planner code
+(**`1184`** — demo value, defined in `auth.js`) stores the admin role in the
+browser's localStorage. Admins get a "PLANNER CONSOLE →" link in the driver
+app's footer and a SIGN OUT link in the studio topbar.
+
+> ⚠️ This is **demo-level** access control: the check runs entirely in the
+> browser, so it signals who should be here rather than enforcing it. For real
+> enforcement, put the studio behind a backend or an access layer (e.g.
+> Netlify Identity / password-protected site, Cloudflare Access, or an OAuth
+> proxy) when this moves past the pilot mock.
+
 ## Google Maps & Street View
 
 Every challenge and stop is a real, geocoded Berlin address, and the app is
@@ -103,6 +117,7 @@ the illustrated skyline automatically.
 | `app.js`                | Driver app: state, data, renderers, interactions   |
 | `challenge-studio.html` | Planner console shell                              |
 | `studio.js`             | Planner console: library/editor, reward logic      |
+| `auth.js`               | Shared demo role gate (admin unlock, localStorage) |
 | `styles.css`            | Base styles, icon helpers, hover states, keyframes |
 | `fonts.css`             | `@font-face` declarations for the vendored fonts   |
 | `assets/profile.png`    | Avatar                                             |

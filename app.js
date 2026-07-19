@@ -718,7 +718,7 @@ function render() {
     ${renderTopbar(vm)}
     <div style="max-width:1120px;margin:0 auto;padding:52px 40px 80px;">
       ${pages[vm.page](vm)}
-      <div style="margin-top:56px;${MONO}font-size:10px;letter-spacing:.14em;color:#4f5a69;">POSTNORD · REAL-WORLD INTELLIGENCE LAYER · REWARDS PILOT · BERLIN NORD</div>
+      <div style="margin-top:56px;${MONO}font-size:10px;letter-spacing:.14em;color:#4f5a69;">POSTNORD · REAL-WORLD INTELLIGENCE LAYER · REWARDS PILOT · BERLIN NORD${typeof AUTH !== 'undefined' && AUTH.isAdmin() ? ' · <a href="challenge-studio.html" style="color:#3cc0e0;">PLANNER CONSOLE →</a>' : ''}</div>
     </div>
   </div>`;
   applyAnimatedWidths();
