@@ -13,5 +13,5 @@
  * planner code gate).
  * ============================================================ */
 
-window.SUPABASE_URL = '';
-window.SUPABASE_ANON_KEY = '';
+window.SUPABASE_URL = 'https://ocdiaspdwnmfkiatlouk.supabase.co';
+window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jZGlhc3Bkd25tZmtpYXRsb3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NTg0NjIsImV4cCI6MjEwMDAzNDQ2Mn0.aUwTqGQulD5kbHgEGtmUbAGtlqkmXbpYiszs5XaILU0';
