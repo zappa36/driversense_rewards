@@ -13,6 +13,8 @@ GitHub Pages automatically on every push to `main` (see
 
 ## Screens
 
+Driver app (`index.html`):
+
 - **Dashboard** — balance, cashout progress, claimable rewards, featured
   challenges, zone mastery overview, and a reward shop.
 - **Challenges** — the weekend special banner plus six live challenges.
@@ -20,6 +22,17 @@ GitHub Pages automatically on every push to `main` (see
   then the payout can be claimed into the balance.
 - **Zones** — zone mastery list with per-zone stops that need attention.
 - **Cashout** — payout method selection, cashout (unlocks at € 25), and history.
+
+Planner console (`challenge-studio.html`, from `Challenge Studio.dc.html`):
+
+- **Challenges tab** — challenge library with a full editor (title, status,
+  description, zone, task type, goal, duration, reward, XP, tier, boost
+  eligibility), a live driver-card preview, and per-challenge cost economics.
+  Supports publish/unpublish, duplicate, archive and new drafts.
+- **Reward logic tab** — hub-wide rules: payout currency (euro/points),
+  weekend boost multiplier, reporting-streak ladder, cashout minimum and
+  daily cap, verification guardrails, and a season budget with a live
+  projection bar fed by the estimated cost of all LIVE challenges.
 
 ## Running
 
@@ -37,12 +50,14 @@ Opening `index.html` directly from disk also works.
 
 The design's props are exposed as URL query parameters:
 
-| Parameter | Values            | Default | Effect                              |
-|-----------|-------------------|---------|-------------------------------------|
-| `mode`    | `euro` / `points` | `euro`  | Show payouts in euros or points     |
-| `boost`   | `1` / `0`         | `1`     | Weekend ×1.5 payout boost on/off    |
-| `streak`  | `3`–`30`          | `6`     | Reporting-streak day count          |
-| `gkey`    | API key           | —       | Google Maps API key (see below)     |
+| Page                    | Parameter | Values            | Default | Effect                              |
+|-------------------------|-----------|-------------------|---------|-------------------------------------|
+| `index.html`            | `mode`    | `euro` / `points` | `euro`  | Show payouts in euros or points     |
+| `index.html`            | `boost`   | `1` / `0`         | `1`     | Weekend ×1.5 payout boost on/off    |
+| `index.html`            | `streak`  | `3`–`30`          | `6`     | Reporting-streak day count          |
+| `index.html`            | `gkey`    | API key           | —       | Google Maps API key (see below)     |
+| `challenge-studio.html` | `drivers` | `5`–`200`         | `24`    | Hub driver count for cost estimates |
+| `challenge-studio.html` | `eco`     | `1` / `0`         | `1`     | Show/hide the economics panel       |
 
 Example: `index.html?mode=points&boost=0&streak=9`
 
@@ -82,11 +97,13 @@ the illustrated skyline automatically.
 
 ## Structure
 
-| File                 | Purpose                                            |
-|----------------------|----------------------------------------------------|
-| `index.html`         | Shell: fonts, stylesheet, app mount point          |
-| `styles.css`         | Base styles, icon helpers, hover states, keyframes |
-| `fonts.css`          | `@font-face` declarations for the vendored fonts   |
-| `app.js`             | State, data, view-model, renderers, interactions   |
-| `assets/profile.png` | Driver avatar                                      |
-| `assets/fonts/`      | Vendored fonts (Saira, Saira Semi Condensed, JetBrains Mono, Material Symbols Rounded) — the app works fully offline |
+| File                    | Purpose                                            |
+|-------------------------|----------------------------------------------------|
+| `index.html`            | Driver app shell: fonts, stylesheet, mount point   |
+| `app.js`                | Driver app: state, data, renderers, interactions   |
+| `challenge-studio.html` | Planner console shell                              |
+| `studio.js`             | Planner console: library/editor, reward logic      |
+| `styles.css`            | Base styles, icon helpers, hover states, keyframes |
+| `fonts.css`             | `@font-face` declarations for the vendored fonts   |
+| `assets/profile.png`    | Avatar                                             |
+| `assets/fonts/`         | Vendored fonts (Saira, Saira Semi Condensed, JetBrains Mono, Material Symbols Rounded) — the apps work fully offline |
