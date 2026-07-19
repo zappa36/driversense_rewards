@@ -47,6 +47,9 @@ a:hover { color: #3cc0e0; }
 /* Form fields (Challenge Studio) */
 input:focus, textarea:focus, select:focus { border-color: rgba(4, 152, 186, .55) !important; }
 
+/* Topbar avatar links to the planner sign-in */
+a[title="Planner sign-in"]:hover img { border-color: #3cc0e0 !important; }
+
 /* Zone stops: link into Street View, reveal the hint on hover */
 a.stop-link { color: #eef2f7; }
 a.stop-link:hover { color: #3cc0e0; }

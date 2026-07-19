@@ -360,10 +360,10 @@ function renderTopbar(vm) {
       </div>
       <div style="display:flex;align-items:center;gap:14px;flex:none;">
         <span style="${MONO}font-size:13px;font-weight:700;color:#5fe0b4;">${vm.balanceLabel}</span>
-        <div style="position:relative;width:34px;height:34px;flex:none;">
-          <img src="assets/profile.png" alt="M. Kaur" style="width:34px;height:34px;border-radius:50%;object-fit:cover;display:block;border:1.5px solid rgba(140,165,200,.35);">
+        <a href="challenge-studio.html" title="Planner sign-in" style="position:relative;width:34px;height:34px;flex:none;display:block;">
+          <img src="assets/profile.png" alt="M. Kaur" style="width:34px;height:34px;border-radius:50%;object-fit:cover;display:block;border:1.5px solid rgba(140,165,200,.35);transition:border-color .15s ease;">
           <span style="position:absolute;right:-4px;bottom:-4px;width:16px;height:16px;border-radius:50%;background:linear-gradient(180deg,#ffd95e,#f3ac10);border:2px solid #0a121d;display:flex;align-items:center;justify-content:center;${COND}font-weight:700;font-size:9px;color:#5a3d06;">6</span>
-        </div>
+        </a>
       </div>
     </div>
   </div>`;
