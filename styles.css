@@ -36,3 +36,15 @@ a:hover { color: #3cc0e0; }
 .card-hover-gold:hover { border-color: rgba(245, 197, 66, .35) !important; }
 
 .btn-start:hover { background: rgba(4, 152, 186, .2) !important; }
+
+/* Google Maps embed, re-tinted to match the dark UI. The white base (and
+ * the map's light tiles) invert to dark; hue-rotate keeps colors sane. */
+.map-dark iframe {
+  filter: invert(90%) hue-rotate(180deg) saturate(.75) contrast(.95);
+  background: #fff;
+}
+
+/* Zone stops: link into Street View, reveal the hint on hover */
+a.stop-link { color: #eef2f7; }
+a.stop-link:hover { color: #3cc0e0; }
+a.stop-link:hover .stop-peek { opacity: 1 !important; }

@@ -21,6 +21,14 @@ const props = {
   streakDays: Math.min(30, Math.max(3, parseInt(params.get('streak'), 10) || 6)),
 };
 
+/* Google Maps / Street View integration.
+ * With a key (?gkey=... or window.GMAPS_KEY), challenge cards load live
+ * Street View Static imagery and the zones map uses the Maps Embed API.
+ * Without one, cards keep the illustrated skyline and the zones map falls
+ * back to the keyless Google Maps embed. Address chips and stops always
+ * deep-link into Street View / Google Maps. */
+const GMAPS_KEY = params.get('gkey') || window.GMAPS_KEY || '';
+
 const TARGET = 25;
 const MULT = props.weekendBoost ? 1.5 : 1;
 
@@ -51,16 +59,17 @@ const ACCENTS = {
 const SPECIAL = {
   id: 'c0', tone: 'gold', title: 'District Master: Prenzlauer Berg', value: 15.00, xp: 400,
   zone: 'PRENZLAUER BERG', left: 'ENDS SUN 24:00', tier: 'EPIC', unit: '12 STOPS', addr: 'Prenzlauer Berg',
+  lat: 52.53688, lng: 13.420892,
   desc: 'Own your home zone this weekend — leave every stop verified, coded and noted. Top payout of the week, and the whole hub sees it.',
 };
 
 const CHALLENGES = [
-  { id: 'c1', tone: 'gold', title: 'Mystery Stop Hunter', value: 8.50, xp: 180, zone: 'PRENZLAUER BERG', left: '3D LEFT', tier: 'MEDIUM', unit: '5 STOPS', addr: 'Rykestraße 21', desc: 'Refresh field notes at five unverified stops on tomorrow’s route.' },
-  { id: 'c2', tone: 'cyan', title: 'Access Code Collector', value: 5.20, xp: 120, zone: 'MITTE', left: '5D LEFT', tier: 'MEDIUM', unit: '8 CODES', addr: 'Rosenthaler Str. 40', desc: 'Confirm door codes at eight buildings around Rosenthaler Platz.' },
-  { id: 'c3', tone: 'mint', title: 'New Zone Scout', value: 12.00, xp: 240, zone: 'WEISSENSEE', left: '6D LEFT', tier: 'EPIC', unit: '6 RIDES', addr: 'Berliner Allee 250', desc: 'First rides in Weißensee — map access where the system is blind.' },
-  { id: 'c4', tone: 'mint', title: 'Voice Note Sprint', value: 3.80, xp: 90, zone: 'YOUR ROUTE', left: '2D LEFT', tier: 'EASY', unit: '10 NOTES', addr: 'Route DE-1184', desc: 'Speak ten hands-free approach notes for the next driver.' },
-  { id: 'c5', tone: 'cyan', title: 'Safe Drop Scout', value: 4.60, xp: 110, zone: 'PANKOW', left: '4D LEFT', tier: 'EASY', unit: '6 PHOTOS', addr: 'Breite Str. 5', desc: 'Photograph agreed safe-drop points at six stops missing one.' },
-  { id: 'c6', tone: 'gold', title: 'Loading Dock Mapper', value: 9.00, xp: 200, zone: 'GESUNDBRUNNEN', left: '7D LEFT', tier: 'MEDIUM', unit: '4 DOCKS', addr: 'Badstraße 20', desc: 'Chart dock access and waiting rules at four retail stops.' },
+  { id: 'c1', tone: 'gold', title: 'Mystery Stop Hunter', value: 8.50, xp: 180, zone: 'PRENZLAUER BERG', left: '3D LEFT', tier: 'MEDIUM', unit: '5 STOPS', addr: 'Rykestraße 21', lat: 52.53688, lng: 13.420892, desc: 'Refresh field notes at five unverified stops on tomorrow’s route.' },
+  { id: 'c2', tone: 'cyan', title: 'Access Code Collector', value: 5.20, xp: 120, zone: 'MITTE', left: '5D LEFT', tier: 'MEDIUM', unit: '8 CODES', addr: 'Rosenthaler Str. 40', lat: 52.524001, lng: 13.402501, desc: 'Confirm door codes at eight buildings around Rosenthaler Platz.' },
+  { id: 'c3', tone: 'mint', title: 'New Zone Scout', value: 12.00, xp: 240, zone: 'WEISSENSEE', left: '6D LEFT', tier: 'EPIC', unit: '6 RIDES', addr: 'Berliner Allee 250', lat: 52.559737, lng: 13.46724, desc: 'First rides in Weißensee — map access where the system is blind.' },
+  { id: 'c4', tone: 'mint', title: 'Voice Note Sprint', value: 3.80, xp: 90, zone: 'YOUR ROUTE', left: '2D LEFT', tier: 'EASY', unit: '10 NOTES', addr: 'Route DE-1184', lat: 52.550859, lng: 13.413536, svLoc: '52.550859,13.413536', desc: 'Speak ten hands-free approach notes for the next driver.' },
+  { id: 'c5', tone: 'cyan', title: 'Safe Drop Scout', value: 4.60, xp: 110, zone: 'PANKOW', left: '4D LEFT', tier: 'EASY', unit: '6 PHOTOS', addr: 'Breite Str. 5', lat: 52.571484, lng: 13.410986, desc: 'Photograph agreed safe-drop points at six stops missing one.' },
+  { id: 'c6', tone: 'gold', title: 'Loading Dock Mapper', value: 9.00, xp: 200, zone: 'GESUNDBRUNNEN', left: '7D LEFT', tier: 'MEDIUM', unit: '4 DOCKS', addr: 'Badstraße 20', lat: 52.55178, lng: 13.383148, desc: 'Chart dock access and waiting rules at four retail stops.' },
 ];
 
 const ALL_CHALLENGES = Object.fromEntries([SPECIAL, ...CHALLENGES].map(c => [c.id, c]));
@@ -79,31 +88,31 @@ const PATCHES = {
 
 const ZONES = [
   { id: 'z1', name: 'Prenzlauer Berg', code: 'DE-1184 · HOME', pct: 78, boosted: true, stops: [
-    { addr: 'Schönhauser Allee 112', tag: 'STALE NOTE', v: 0.40 },
-    { addr: 'Kastanienallee 8', tag: 'NO CODE', v: 0.60 },
-    { addr: 'Rykestraße 21', tag: 'NEW STOP', v: 0.80 },
+    { addr: 'Schönhauser Allee 112', tag: 'STALE NOTE', v: 0.40, lat: 52.550859, lng: 13.413536 },
+    { addr: 'Kastanienallee 8', tag: 'NO CODE', v: 0.60, lat: 52.536052, lng: 13.407086 },
+    { addr: 'Rykestraße 21', tag: 'NEW STOP', v: 0.80, lat: 52.53688, lng: 13.420892 },
   ] },
   { id: 'z2', name: 'Mitte', code: 'DE-1162', pct: 54, boosted: false, stops: [
-    { addr: 'Rosenthaler Str. 40', tag: 'NO CODE', v: 0.60 },
-    { addr: 'Torstraße 98', tag: 'STALE NOTE', v: 0.40 },
-    { addr: 'Ackerstraße 14', tag: 'DOCK UNKNOWN', v: 0.70 },
+    { addr: 'Rosenthaler Str. 40', tag: 'NO CODE', v: 0.60, lat: 52.524001, lng: 13.402501 },
+    { addr: 'Torstraße 98', tag: 'STALE NOTE', v: 0.40, lat: 52.529473, lng: 13.404289 },
+    { addr: 'Ackerstraße 14', tag: 'DOCK UNKNOWN', v: 0.70, lat: 52.53103, lng: 13.396877 },
   ] },
   { id: 'z3', name: 'Pankow', code: 'DE-1190', pct: 31, boosted: false, stops: [
-    { addr: 'Breite Str. 5', tag: 'STALE NOTE', v: 0.40 },
-    { addr: 'Florastraße 33', tag: 'NEW STOP', v: 0.80 },
+    { addr: 'Breite Str. 5', tag: 'STALE NOTE', v: 0.40, lat: 52.571484, lng: 13.410986 },
+    { addr: 'Florastraße 33', tag: 'NEW STOP', v: 0.80, lat: 52.565031, lng: 13.405278 },
   ] },
   { id: 'z4', name: 'Weißensee', code: 'NEW AREA', pct: 6, boosted: true, stops: [
-    { addr: 'Berliner Allee 250', tag: 'NEW STOP', v: 0.80 },
-    { addr: 'Pistoriusstraße 12', tag: 'NEW STOP', v: 0.80 },
-    { addr: 'Langhansstraße 74', tag: 'NO CODE', v: 0.60 },
+    { addr: 'Berliner Allee 250', tag: 'NEW STOP', v: 0.80, lat: 52.559737, lng: 13.46724 },
+    { addr: 'Pistoriusstraße 12', tag: 'NEW STOP', v: 0.80, lat: 52.551226, lng: 13.455488 },
+    { addr: 'Langhansstraße 74', tag: 'NO CODE', v: 0.60, lat: 52.554686, lng: 13.430807 },
   ] },
   { id: 'z5', name: 'Gesundbrunnen', code: 'DE-1201', pct: 44, boosted: false, stops: [
-    { addr: 'Badstraße 20', tag: 'DOCK UNKNOWN', v: 0.70 },
-    { addr: 'Brunnenstraße 64', tag: 'STALE NOTE', v: 0.40 },
+    { addr: 'Badstraße 20', tag: 'DOCK UNKNOWN', v: 0.70, lat: 52.55178, lng: 13.383148 },
+    { addr: 'Brunnenstraße 64', tag: 'STALE NOTE', v: 0.40, lat: 52.540436, lng: 13.394635 },
   ] },
   { id: 'z6', name: 'Wedding', code: 'DE-1177', pct: 22, boosted: false, stops: [
-    { addr: 'Müllerstraße 143', tag: 'NO CODE', v: 0.60 },
-    { addr: 'Seestraße 49', tag: 'STALE NOTE', v: 0.40 },
+    { addr: 'Müllerstraße 143', tag: 'NO CODE', v: 0.60, lat: 52.548182, lng: 13.354267 },
+    { addr: 'Seestraße 49', tag: 'STALE NOTE', v: 0.40, lat: 52.550833, lng: 13.353482 },
   ] },
 ];
 
@@ -132,6 +141,16 @@ const CARD = 'border:1px solid rgba(140,165,200,.12);border-radius:16px;backgrou
 
 /* ---------- helpers ---------- */
 const fmt = v => props.payoutMode === 'points' ? Math.round(v * 100) + ' P' : '€ ' + v.toFixed(2);
+
+/* Google Maps / Street View URLs */
+const svPanoUrl = (lat, lng) => `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+const mapSearchUrl = q => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q + ', Berlin')}`;
+const svImageUrl = c => GMAPS_KEY
+  ? `https://maps.googleapis.com/maps/api/streetview?size=640x300&location=${encodeURIComponent(c.svLoc || c.addr + ', Berlin')}&fov=80&key=${GMAPS_KEY}`
+  : null;
+const zoneMapEmbedUrl = z => GMAPS_KEY
+  ? `https://www.google.com/maps/embed/v1/place?key=${GMAPS_KEY}&q=${encodeURIComponent(z.name + ', Berlin')}&zoom=14`
+  : `https://maps.google.com/maps?q=${encodeURIComponent(z.name + ', Berlin')}&z=14&output=embed`;
 
 function icon(name, size, color, filled) {
   return `<span class="msr${filled ? ' fill' : ''}" style="font-size:${size}px;${color ? `color:${color};` : ''}">${name}</span>`;
@@ -276,8 +295,18 @@ function scenery(c, { glow = '.13', mid = true, dash = true } = {}) {
     <div style="${c.patchStyle}"><span style="${MONO}font-size:8.5px;letter-spacing:.16em;color:${c.accent};">UNMAPPED</span></div>`;
 }
 
+/* Live Street View photo layered between the illustrated skyline and the
+ * overlay chips; if Google can't serve it, it removes itself and the
+ * illustration shows through. */
+function svOverlay(c) {
+  const url = svImageUrl(c);
+  if (!url) return '';
+  return `<img src="${url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" style="position:absolute;inset:0;z-index:1;width:100%;height:100%;object-fit:cover;">`;
+}
+
+/* Address chip deep-links into the real Street View panorama. */
 function addrChip(c, pos) {
-  return `<span style="position:absolute;${pos};z-index:3;display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:7px;background:rgba(7,13,22,.78);${MONO}font-size:9px;letter-spacing:.08em;color:#cdd6e2;">${icon('location_on', 12, c.accent, true)}${c.addr}</span>`;
+  return `<a href="${svPanoUrl(c.lat, c.lng)}" target="_blank" rel="noopener" style="position:absolute;${pos};z-index:3;display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:7px;background:rgba(7,13,22,.78);${MONO}font-size:9px;letter-spacing:.08em;color:#cdd6e2;">${icon('location_on', 12, c.accent, true)}${c.addr}</a>`;
 }
 
 function streetViewCredit(pos) {
@@ -345,6 +374,7 @@ function renderFeaturedCard(c) {
   <div class="card-hover-cyan" style="display:flex;flex-direction:column;overflow:hidden;${CARD}">
     <div style="position:relative;height:118px;flex:none;background:${c.sky};">
       ${scenery(c)}
+      ${svOverlay(c)}
       ${addrChip(c, 'left:12px;top:12px')}
       ${streetViewCredit('right:12px;bottom:10px')}
     </div>
@@ -463,6 +493,7 @@ function renderChallengeCard(c) {
   <div class="card-hover-cyan" style="display:flex;flex-direction:column;overflow:hidden;${CARD}">
     <div style="position:relative;height:132px;flex:none;background:${c.sky};">
       ${scenery(c)}
+      ${svOverlay(c)}
       ${addrChip(c, 'left:12px;top:12px')}
       <span style="position:absolute;right:12px;top:12px;z-index:3;"><span style="${c.tierStyle}">${c.tier}</span></span>
       <span style="position:absolute;left:12px;bottom:10px;z-index:3;display:inline-flex;align-items:center;gap:5px;${MONO}font-size:8px;letter-spacing:.12em;color:rgba(205,220,235,.55);"><span style="width:5px;height:5px;border-radius:50%;background:#5fe0b4;"></span>LIVE SNAPSHOT</span>
@@ -514,6 +545,7 @@ function renderSpecialBanner(vm) {
     </div>
     <div style="position:relative;width:238px;height:150px;flex:none;border-radius:12px;overflow:hidden;border:1px solid rgba(245,197,66,.3);background:${sp.sky};">
       ${scenery(sp, { glow: '.15', mid: false, dash: false })}
+      ${svOverlay(sp)}
       ${addrChip(sp, 'left:10px;top:10px')}
       ${streetViewCredit('right:10px;bottom:8px')}
     </div>
@@ -583,12 +615,20 @@ function renderZones(vm) {
         </div>
         <div style="margin-top:8px;height:6px;border-radius:4px;background:rgba(140,165,200,.14);overflow:hidden;"><div style="height:100%;width:${sel.pctW};border-radius:4px;background:linear-gradient(90deg,#0f6d8c,#3cc0e0);"></div></div>
         <div style="margin-top:7px;${MONO}font-size:10px;letter-spacing:.08em;color:#6f7c8e;">${sel.badgeNote}</div>
+        <div style="margin-top:24px;position:relative;border-radius:12px;overflow:hidden;border:1px solid rgba(140,165,200,.15);" class="map-dark">
+          <iframe src="${zoneMapEmbedUrl(sel)}" title="Map of ${sel.name}" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade" style="display:block;width:100%;height:230px;border:0;"></iframe>
+          <span style="position:absolute;left:10px;top:10px;z-index:2;pointer-events:none;display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:7px;background:rgba(7,13,22,.78);${MONO}font-size:9px;letter-spacing:.08em;color:#cdd6e2;"><span style="width:5px;height:5px;border-radius:50%;background:#5fe0b4;"></span>LIVE MAP · GOOGLE MAPS</span>
+          <a href="${mapSearchUrl(sel.name)}" target="_blank" rel="noopener" style="position:absolute;right:10px;top:10px;z-index:2;display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:7px;background:rgba(7,13,22,.78);${MONO}font-size:9px;letter-spacing:.08em;color:#3cc0e0;">OPEN IN MAPS${icon('open_in_new', 11, '#3cc0e0')}</a>
+        </div>
         <div style="margin-top:26px;${MONO}font-size:10px;letter-spacing:.16em;color:#8b97a8;">${sel.stopsLabel}</div>
         <div style="margin-top:10px;border-top:1px solid rgba(140,165,200,.1);">
           ${sel.stops.map(st => `
           <div style="display:flex;align-items:center;gap:14px;padding:13px 2px;border-bottom:1px solid rgba(140,165,200,.09);">
-            ${icon('location_on', 17, '#5f6e80')}
-            <span style="flex:1;${COND}font-weight:500;font-size:15px;">${st.addr}</span>
+            <a class="stop-link" href="${svPanoUrl(st.lat, st.lng)}" target="_blank" rel="noopener" title="Open in Street View" style="flex:1;min-width:0;display:flex;align-items:center;gap:14px;">
+              ${icon('location_on', 17, '#5f6e80')}
+              <span style="flex:1;${COND}font-weight:500;font-size:15px;">${st.addr}</span>
+              <span class="stop-peek" style="display:inline-flex;align-items:center;gap:4px;${MONO}font-size:9px;letter-spacing:.08em;color:#3cc0e0;opacity:0;transition:opacity .15s ease;">${icon('visibility', 12, '#3cc0e0')}STREET VIEW</span>
+            </a>
             <span style="${st.tagStyle}">${st.tag}</span>
             <span style="width:60px;text-align:right;${MONO}font-size:12px;font-weight:700;color:#5fe0b4;">${st.reward}</span>
           </div>`).join('')}
