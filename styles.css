@@ -1,0 +1,38 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-width: 1180px;
+  background: radial-gradient(120% 90% at 20% 0%, #0b1827 0%, #08121f 55%, #050b14 100%);
+  font-family: 'Saira', system-ui, sans-serif;
+  color: #eef2f7;
+}
+
+a, a:link, a:visited { color: #ffffff; text-decoration: none; }
+a:hover { color: #3cc0e0; }
+
+@keyframes sheen {
+  0%   { transform: translateX(-140%); }
+  100% { transform: translateX(340%); }
+}
+
+/* Material Symbols icon helper */
+.msr {
+  font-family: 'Material Symbols Rounded';
+  font-feature-settings: 'liga';
+}
+.msr.fill { font-variation-settings: 'FILL' 1; }
+
+/* Hover states (the markup is rendered from JS with inline styles,
+   so hover-only rules live here and override with !important). */
+.hover-lift { transition: transform .15s ease; }
+.hover-lift:hover { transform: translateY(-1px); }
+
+.card-hover-cyan { transition: border-color .18s ease; }
+.card-hover-cyan:hover { border-color: rgba(4, 152, 186, .4) !important; }
+
+.card-hover-gold { transition: border-color .18s ease; }
+.card-hover-gold:hover { border-color: rgba(245, 197, 66, .35) !important; }
+
+.btn-start:hover { background: rgba(4, 152, 186, .2) !important; }
