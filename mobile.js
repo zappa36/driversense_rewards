@@ -75,6 +75,7 @@ function show(name, push = true) {
   void el.offsetWidth; // restart the enter animation
   el.classList.add('active');
   if (name === 'otto') ottoStart();
+  if (name === 'tag') startGeolocation();
   if (name === 'map') stack.length = 0;
 }
 
@@ -163,6 +164,96 @@ function setBeat(n) {
 
 function ottoStart() { beat = 0; renderOtto(); scheduleOtto(); }
 function ottoStop() { clearTimeout(ottoTimer); clearTimeout(levelTimer); }
+
+/* ---------- phone GPS · tag-a-place ---------- */
+let geo = null;      // { lat, lng, acc } from the device
+let geoAddr = null;  // reverse-geocoded street ("Kollwitzstraße 18")
+const DEMO_SPOT = { lat: 52.5346, lng: 13.4109, acc: 4, addr: 'Kollwitzstraße 18' };
+
+const setTagChips = text => {
+  ['tag-acc-hud', 'tag-acc-sheet'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  });
+};
+
+function startGeolocation() {
+  if (!('geolocation' in navigator)) return geoFallback();
+  setTagChips('LOCATING…');
+  document.getElementById('tag-gps-note').textContent = 'WAITING FOR GPS FIX…';
+  navigator.geolocation.getCurrentPosition(pos => {
+    geo = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy || 0 };
+    setTagChips('GPS ±' + Math.max(1, Math.round(geo.acc)) + ' m');
+    document.getElementById('tag-gps-note').textContent = `DROPPED AT ${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)}`;
+    document.getElementById('tag-addr').textContent = `${geo.lat.toFixed(4)}°N, ${geo.lng.toFixed(4)}°E`;
+    reverseGeocode(geo).then(res => {
+      if (!res) return;
+      if (res.street) {
+        geoAddr = res.street;
+        document.getElementById('tag-addr').textContent = res.street;
+      }
+      if (res.area) {
+        const chip = document.getElementById('map-area');
+        if (chip) chip.textContent = res.area.toUpperCase().slice(0, 16);
+      }
+    });
+  }, () => geoFallback(), { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
+}
+
+function geoFallback() {
+  geo = null;
+  geoAddr = null;
+  setTagChips('GPS OFF · DEMO SPOT');
+  document.getElementById('tag-gps-note').textContent = 'DEMO LOCATION · KOLLWITZKIEZ';
+  document.getElementById('tag-addr').textContent = DEMO_SPOT.addr;
+}
+
+async function reverseGeocode({ lat, lng }) {
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    const a = d.address || {};
+    const road = a.road || a.pedestrian || a.footway || a.square || null;
+    return {
+      street: road ? (a.house_number ? `${road} ${a.house_number}` : road) : (d.name || null),
+      area: a.suburb || a.city_district || a.neighbourhood || null,
+    };
+  } catch { return null; }
+}
+
+function localSavePlace(row) {
+  try {
+    const list = JSON.parse(localStorage.getItem('ds_places') || '[]');
+    list.push({ ...row, created_at: new Date().toISOString() });
+    localStorage.setItem('ds_places', JSON.stringify(list));
+  } catch { /* private mode */ }
+}
+
+function saveTaggedPlace() {
+  const spot = geo || DEMO_SPOT;
+  const row = {
+    name: geoAddr || (geo ? `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}` : DEMO_SPOT.addr),
+    note: 'Tiny bakery — cash only, the cinnamon knots go fast',
+    lat: spot.lat,
+    lng: spot.lng,
+    accuracy: spot.acc != null ? Math.round(spot.acc * 10) / 10 : null,
+  };
+  const label = document.getElementById('tag-save-label');
+  label.textContent = 'Saving…';
+  const finish = shared => {
+    label.textContent = shared ? 'Saved ✓' : 'Saved on this phone ✓';
+    tagBonus = 50; /* first to map */
+    renderPoints();
+    setTimeout(() => { show('map'); label.textContent = 'Save place'; }, 700);
+  };
+  if (typeof DB !== 'undefined' && DB.enabled) {
+    DB.insertPlace(row).then(() => finish(true)).catch(() => { localSavePlace(row); finish(false); });
+  } else {
+    localSavePlace(row);
+    finish(false);
+  }
+}
 
 /* ---------- leaderboard ---------- */
 const lb = { depot: 'all', mode: 'ind' };
@@ -268,9 +359,7 @@ document.getElementById('phone-screen').addEventListener('click', e => {
       break;
     }
     case 'tag-save':
-      tagBonus = 50; /* first to map: +50 XP */
-      renderPoints();
-      show('map');
+      saveTaggedPlace();
       break;
   }
 });

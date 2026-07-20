@@ -103,5 +103,9 @@ const DB = (() => {
     }, true),
     deleteChallenge: id => rest('/rest/v1/challenges?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }, true),
     saveSettings: row => rest('/rest/v1/settings?id=eq.1', { method: 'PATCH', body: JSON.stringify(row) }, true),
+    /* Places tagged from the mobile app (anon insert by design — the pilot
+     * people app has no accounts; see supabase/places.sql). */
+    insertPlace: row => rest('/rest/v1/places', { method: 'POST', body: JSON.stringify([row]) }),
+    listPlaces: limit => rest('/rest/v1/places?select=*&order=created_at.desc&limit=' + (limit || 20)),
   };
 })();

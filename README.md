@@ -36,6 +36,14 @@ single-phone prototype with eight connected screens:
   chip** for the leaderboard (working area/team toggles; the season chip
   opens the **Winter Streets season** screen), or the **gold pin** to tag a
   brand-new place and earn First-to-map XP.
+- **Tag a place uses the phone's real GPS**: opening the screen asks for
+  location permission, shows your live coordinates and accuracy, and
+  reverse-geocodes the street name (OpenStreetMap Nominatim). "Save place"
+  writes the location to the Supabase `places` table (run
+  [`supabase/places.sql`](supabase/places.sql) once to create it); if GPS is
+  denied or the backend is unreachable, it falls back to a demo spot and
+  saves on-device. Geolocation requires HTTPS — the GitHub Pages URL
+  qualifies.
 - On a phone-sized viewport the app runs full-bleed; on desktop it's a
   centered phone. When Supabase is configured, the Season screen lists the
   **LIVE challenges published in Challenge Studio** with boost-adjusted
@@ -95,7 +103,10 @@ Setup, once:
 2. In the Supabase **SQL editor**, paste and run [`supabase/schema.sql`](supabase/schema.sql).
    It creates the `challenges` and `settings` tables, the security rules
    (anonymous visitors read LIVE challenges only; signed-in planners read and
-   write everything), and seeds the demo data.
+   write everything), and seeds the demo data. Then run
+   [`supabase/places.sql`](supabase/places.sql) the same way — it creates the
+   `places` table the mobile app saves GPS-tagged locations into (open to the
+   anon key by design, since the pilot people app has no accounts).
 3. In **Authentication → Users**, click "Add user" and create your planner
    account (email + password, "Auto confirm user" on).
 4. In **Project Settings → API**, copy the **Project URL** and the **anon
@@ -167,6 +178,7 @@ the illustrated skyline automatically.
 | `config.js`             | Supabase project URL + anon key (empty = demo mode)|
 | `db.js`                 | Minimal Supabase REST client (auth, challenges, settings) |
 | `supabase/schema.sql`   | Tables, Row Level Security, seed data              |
+| `supabase/places.sql`   | Places table for GPS-tagged locations              |
 | `styles.css`            | Base styles, icon helpers, hover states, keyframes |
 | `fonts.css`             | `@font-face` declarations for the vendored fonts   |
 | `assets/profile.png`    | Avatar                                             |
