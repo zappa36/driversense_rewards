@@ -23,6 +23,18 @@ Driver app (`index.html`):
 - **Zones** — zone mastery list with per-zone stops that need attention.
 - **Cashout** — payout method selection, cashout (unlocks at € 25), and history.
 
+Mobile app storyboard (`mobile.html`, from `People Mobile v1.dc.html`):
+
+- An 8-frame pannable/zoomable board of the consumer mobile app: city map,
+  Otto voice debrief (animated, self-advancing conversation with replay
+  controls), inherited place tips, leaderboard with working area/team
+  toggles, place mastery, season screen, level-up celebration, and
+  tag-a-place. Right-drag to pan, scroll to zoom.
+- When Supabase is configured, the Season frame lists the **LIVE challenges
+  published in Challenge Studio** (same source as the driver app), with
+  boost-adjusted rewards; otherwise it falls back to the design's static
+  content.
+
 Planner console (`challenge-studio.html`, from `Challenge Studio.dc.html`):
 
 - **Challenges tab** — challenge library with a full editor (title, status,
@@ -58,6 +70,9 @@ The design's props are exposed as URL query parameters:
 | `index.html`            | `gkey`    | API key           | —       | Google Maps API key (see below)     |
 | `challenge-studio.html` | `drivers` | `5`–`200`         | `24`    | Hub driver count for cost estimates |
 | `challenge-studio.html` | `eco`     | `1` / `0`         | `1`     | Show/hide the economics panel       |
+| `mobile.html`           | `brand`   | hex color         | `#0498BA` | Brand color (URL-encode the `#`)  |
+| `mobile.html`           | `coin`    | hex color         | `#FFCC00` | Coin/gold accent color            |
+| `mobile.html`           | `gamify`  | `1` / `0`         | `1`     | Show/hide gamification chrome       |
 
 Example: `index.html?mode=points&boost=0&streak=9`
 
@@ -140,6 +155,8 @@ the illustrated skyline automatically.
 | `app.js`                | Driver app: state, data, renderers, interactions   |
 | `challenge-studio.html` | Planner console shell                              |
 | `studio.js`             | Planner console: library/editor, reward logic      |
+| `mobile.html`           | Mobile app storyboard (8 frames, static board)     |
+| `mobile.js`             | Storyboard: theme, pan/zoom, Otto, leaderboard, live challenges |
 | `auth.js`               | Role gate: Supabase session or demo code fallback  |
 | `config.js`             | Supabase project URL + anon key (empty = demo mode)|
 | `db.js`                 | Minimal Supabase REST client (auth, challenges, settings) |
