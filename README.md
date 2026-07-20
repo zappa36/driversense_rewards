@@ -23,17 +23,23 @@ Driver app (`index.html`):
 - **Zones** — zone mastery list with per-zone stops that need attention.
 - **Cashout** — payout method selection, cashout (unlocks at € 25), and history.
 
-Mobile app storyboard (`mobile.html`, from `People Mobile v1.dc.html`):
+Mobile app (`mobile.html`, from `People Mobile v1.dc.html`) — the app people
+use to collect data about the city and its buildings. An interactive
+single-phone prototype with eight connected screens:
 
-- An 8-frame pannable/zoomable board of the consumer mobile app: city map,
-  Otto voice debrief (animated, self-advancing conversation with replay
-  controls), inherited place tips, leaderboard with working area/team
-  toggles, place mastery, season screen, level-up celebration, and
-  tag-a-place. Right-drag to pan, scroll to zoom.
-- When Supabase is configured, the Season frame lists the **LIVE challenges
-  published in Challenge Studio** (same source as the driver app), with
-  boost-adjusted rewards; otherwise it falls back to the design's static
-  content.
+- **City map** (home) → tap the flagged building or its card to **arrive**
+  at the place and read tips left by people before you; vote them
+  Helped/Outdated. "Something changed? Tell Otto" starts the **voice
+  debrief** — an animated conversation that ends with your note saved and
+  shared, +50 XP, and (this time) a **level-up celebration**.
+- From the map: tap your **avatar** for place mastery & badges, the **rank
+  chip** for the leaderboard (working area/team toggles; the season chip
+  opens the **Winter Streets season** screen), or the **gold pin** to tag a
+  brand-new place and earn First-to-map XP.
+- On a phone-sized viewport the app runs full-bleed; on desktop it's a
+  centered phone. When Supabase is configured, the Season screen lists the
+  **LIVE challenges published in Challenge Studio** with boost-adjusted
+  rewards; otherwise it falls back to the design's static content.
 
 Planner console (`challenge-studio.html`, from `Challenge Studio.dc.html`):
 
@@ -155,8 +161,8 @@ the illustrated skyline automatically.
 | `app.js`                | Driver app: state, data, renderers, interactions   |
 | `challenge-studio.html` | Planner console shell                              |
 | `studio.js`             | Planner console: library/editor, reward logic      |
-| `mobile.html`           | Mobile app storyboard (8 frames, static board)     |
-| `mobile.js`             | Storyboard: theme, pan/zoom, Otto, leaderboard, live challenges |
+| `mobile.html`           | Mobile app shell: 8 screens in one phone           |
+| `mobile.js`             | Mobile app: navigation, Otto debrief, XP, leaderboard, live challenges |
 | `auth.js`               | Role gate: Supabase session or demo code fallback  |
 | `config.js`             | Supabase project URL + anon key (empty = demo mode)|
 | `db.js`                 | Minimal Supabase REST client (auth, challenges, settings) |

@@ -1,14 +1,18 @@
 'use strict';
 
 /* ============================================================
- * People Mobile v1 — 8-frame storyboard of the consumer app.
- * Implementation of "People Mobile v1.dc.html" (claude.ai/design).
+ * People Mobile v1 — interactive prototype of the consumer app.
+ * From "People Mobile v1.dc.html" (claude.ai/design), reworked
+ * from the design's storyboard into a navigable single-phone app:
  *
- * The board markup is static (mobile.html) so ambient animations
- * never reset; this file adds the theme, right-drag pan / scroll
- * zoom, the Otto debrief state machine, the leaderboard toggles,
- * and — when Supabase is configured — the live challenges from
- * Challenge Studio in the Season frame.
+ *   map ── flagged pin / flag card ──► arrival ── Tell Otto ──► otto
+ *    │                                                            │ debrief done
+ *    ├── avatar ──► profile                    levelup ◄──────────┘
+ *    ├── rank chip ──► leaderboard ── season chip ──► season
+ *    └── gold FAB ──► tag ── Save place (+50 XP) ──► map
+ *
+ * The Season screen lists the LIVE challenges published in
+ * Challenge Studio when Supabase is configured.
  * ============================================================ */
 
 /* ---------- theme (design props, overridable via URL) ----------
@@ -35,66 +39,58 @@ const theme = {
   gamify: params.get('gamify') !== '0',
 };
 
-const board = document.getElementById('board');
-const viewport = document.getElementById('viewport');
+const rootEl = document.documentElement;
+rootEl.style.setProperty('--brand', theme.brand);
+rootEl.style.setProperty('--brand-rgb', rgbArr(theme.brand).join(','));
+rootEl.style.setProperty('--brand-l', shift(theme.brand, 42));
+rootEl.style.setProperty('--brand-d', shift(theme.brand, -34));
+rootEl.style.setProperty('--gold', theme.gold);
+rootEl.style.setProperty('--gamify', theme.gamify ? 'flex' : 'none');
+rootEl.style.setProperty('--gamify-inline', theme.gamify ? 'inline-flex' : 'none');
 
-board.style.setProperty('--brand', theme.brand);
-board.style.setProperty('--brand-rgb', rgbArr(theme.brand).join(','));
-board.style.setProperty('--brand-l', shift(theme.brand, 42));
-board.style.setProperty('--brand-d', shift(theme.brand, -34));
-board.style.setProperty('--gold', theme.gold);
-board.style.setProperty('--gamify', theme.gamify ? 'flex' : 'none');
-board.style.setProperty('--gamify-inline', theme.gamify ? 'inline-flex' : 'none');
+/* ---------- desktop: scale the phone to fit the window ---------- */
+const phone = document.getElementById('phone');
+function fitPhone() {
+  if (window.innerWidth <= 520 || window.innerHeight <= 620) return; // media query handles full-bleed
+  const s = Math.min(1, (window.innerHeight - 28) / 892, (window.innerWidth - 28) / 438);
+  phone.style.transform = `scale(${s})`;
+}
+fitPhone();
+window.addEventListener('resize', fitPhone);
 
-/* ---------- pan / zoom (right-drag pan · scroll zoom) ---------- */
-let tx = 0, ty = 0, scale = Math.min(1, window.innerWidth / 2060);
-tx = Math.max(0, (window.innerWidth - 2060 * scale) / 2);
-const applyView = () => { board.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; };
-applyView();
+/* ---------- navigation ---------- */
+const screens = {};
+document.querySelectorAll('.screen').forEach(s => { screens[s.dataset.screen] = s; });
+let current = 'map';
+const stack = [];
 
-let panning = false, lastX = 0, lastY = 0;
-viewport.addEventListener('mousedown', e => {
-  if (e.button !== 2) return;
-  panning = true; lastX = e.clientX; lastY = e.clientY;
-  document.body.style.cursor = 'grabbing';
-  e.preventDefault();
-});
-window.addEventListener('mousemove', e => {
-  if (!panning) return;
-  tx += e.clientX - lastX; ty += e.clientY - lastY;
-  lastX = e.clientX; lastY = e.clientY;
-  applyView(); e.preventDefault();
-});
-window.addEventListener('mouseup', () => {
-  if (!panning) return;
-  panning = false; document.body.style.cursor = '';
-});
-viewport.addEventListener('contextmenu', e => e.preventDefault());
-viewport.addEventListener('wheel', e => {
-  e.preventDefault();
-  const rect = board.getBoundingClientRect();
-  const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-  const ns = Math.min(3, Math.max(0.25, scale * factor));
-  const f = ns / scale;
-  tx += (e.clientX - rect.left) * (1 - f);
-  ty += (e.clientY - rect.top) * (1 - f);
-  scale = ns;
-  applyView();
-}, { passive: false });
+function show(name, push = true) {
+  if (!screens[name] || name === current) return;
+  if (current === 'otto') ottoStop();
+  if (push) stack.push(current);
+  screens[current].classList.remove('active');
+  current = name;
+  const el = screens[name];
+  el.classList.remove('active');
+  void el.offsetWidth; // restart the enter animation
+  el.classList.add('active');
+  if (name === 'otto') ottoStart();
+  if (name === 'map') stack.length = 0;
+}
 
-/* touch: one-finger pan */
-let touchLast = null;
-viewport.addEventListener('touchstart', e => { if (e.touches.length === 1) touchLast = [e.touches[0].clientX, e.touches[0].clientY]; }, { passive: true });
-viewport.addEventListener('touchmove', e => {
-  if (!touchLast || e.touches.length !== 1) return;
-  tx += e.touches[0].clientX - touchLast[0];
-  ty += e.touches[0].clientY - touchLast[1];
-  touchLast = [e.touches[0].clientX, e.touches[0].clientY];
-  applyView();
-}, { passive: true });
-viewport.addEventListener('touchend', () => { touchLast = null; });
+function goBack() {
+  show(stack.pop() || 'map', false);
+}
 
-/* ---------- Frame 2 · Otto debrief state machine ---------- */
+/* ---------- points (XP wallet on the map HUD) ---------- */
+let ottoBonus = 0;
+let tagBonus = 0;
+const renderPoints = () => {
+  const el = document.getElementById('points-chip');
+  if (el) el.textContent = (1240 + ottoBonus + tagBonus).toLocaleString('en-US');
+};
+
+/* ---------- Otto debrief state machine ---------- */
 const SCRIPT = [
   { q: "Hey M. Kaur — Nº 47 is flagged as changed. What did you find?", a: "The building entrance moved about 50 metres to the left — there's renovation work." },
   { q: "Got it. Is that temporary, or here to stay?", a: "Temporary — just while the renovation's going on." },
@@ -108,6 +104,7 @@ beats.push({ from: 'ai', text: FINAL_MSG });
 
 let beat = 0;
 let ottoTimer = null;
+let levelTimer = null;
 
 const EYES = `<span style="display:flex;align-items:center;gap:14px;">
   <span style="position:relative;width:16px;height:22px;border-radius:50%;background:#fff;display:block;animation:blink 3.6s ease-in-out infinite;transform-origin:center;"><span style="position:absolute;left:3px;top:4px;width:6px;height:6px;border-radius:50%;background:#2a3a78;"></span></span>
@@ -141,7 +138,14 @@ function renderOtto() {
   el('mic-btn').style.display = phase === 'done' ? 'none' : '';
   el('mic-ring').style.display = phase === 'listening' ? '' : 'none';
   el('done-chip').style.display = phase === 'done' && theme.gamify ? 'inline-flex' : 'none';
-  el('points-chip').textContent = (phase === 'done' ? 1290 : 1240).toLocaleString('en-US');
+
+  if (phase === 'done') {
+    ottoBonus = 50;
+    renderPoints();
+    /* The no-lift note pushes M. Kaur over the level threshold. */
+    clearTimeout(levelTimer);
+    levelTimer = setTimeout(() => { if (current === 'otto') show('levelup'); }, 1900);
+  }
 }
 
 function scheduleOtto() {
@@ -157,7 +161,10 @@ function setBeat(n) {
   scheduleOtto();
 }
 
-/* ---------- Frame 4 · leaderboard ---------- */
+function ottoStart() { beat = 0; renderOtto(); scheduleOtto(); }
+function ottoStop() { clearTimeout(ottoTimer); clearTimeout(levelTimer); }
+
+/* ---------- leaderboard ---------- */
 const lb = { depot: 'all', mode: 'ind' };
 
 const LB_IND = [
@@ -213,23 +220,7 @@ function renderLeaderboard() {
   seg('lb-mode-team', lb.mode === 'team');
 }
 
-/* ---------- actions ---------- */
-board.addEventListener('click', e => {
-  const el = e.target.closest('[data-action]');
-  if (!el) return;
-  switch (el.dataset.action) {
-    case 'otto-back': setBeat(beat - 1); break;
-    case 'otto-next': setBeat(beat + 1); break;
-    case 'otto-reset': clearTimeout(ottoTimer); setBeat(0); break;
-    case 'otto-mic': setBeat(beat + 1); break;
-    case 'lb-depot-mine': lb.depot = 'mine'; renderLeaderboard(); break;
-    case 'lb-depot-all': lb.depot = 'all'; renderLeaderboard(); break;
-    case 'lb-mode-ind': lb.mode = 'ind'; renderLeaderboard(); break;
-    case 'lb-mode-team': lb.mode = 'team'; renderLeaderboard(); break;
-  }
-});
-
-/* ---------- Frame 6 · live challenges from Challenge Studio ---------- */
+/* ---------- Season · live challenges from Challenge Studio ---------- */
 const UNIT_ICONS = { STOPS: 'pin_drop', CODES: 'key', PHOTOS: 'photo_camera', NOTES: 'mic', RIDES: 'explore', DOCKS: 'garage' };
 
 function loadSeasonChallenges() {
@@ -251,8 +242,41 @@ function loadSeasonChallenges() {
   }).catch(() => { /* offline — keep the static list */ });
 }
 
+/* ---------- events ---------- */
+document.getElementById('phone-screen').addEventListener('click', e => {
+  const nav = e.target.closest('[data-nav]');
+  if (nav) {
+    const to = nav.dataset.nav;
+    if (to === 'back') goBack();
+    else show(to);
+    return;
+  }
+  const act = e.target.closest('[data-action]');
+  if (!act) return;
+  switch (act.dataset.action) {
+    case 'otto-mic': setBeat(beat + 1); break;
+    case 'lb-depot-mine': lb.depot = 'mine'; renderLeaderboard(); break;
+    case 'lb-depot-all': lb.depot = 'all'; renderLeaderboard(); break;
+    case 'lb-mode-ind': lb.mode = 'ind'; renderLeaderboard(); break;
+    case 'lb-mode-team': lb.mode = 'team'; renderLeaderboard(); break;
+    case 'vote': {
+      /* Helped/Outdated feedback — visual only in the prototype. */
+      const row = act.parentElement;
+      row.querySelectorAll('[data-action="vote"]').forEach(b => b.classList.add('vote-dim'));
+      act.classList.remove('vote-dim');
+      act.classList.add('vote-picked');
+      break;
+    }
+    case 'tag-save':
+      tagBonus = 50; /* first to map: +50 XP */
+      renderPoints();
+      show('map');
+      break;
+  }
+});
+
 /* ---------- boot ---------- */
 renderOtto();
-scheduleOtto();
+renderPoints();
 renderLeaderboard();
 loadSeasonChallenges();
