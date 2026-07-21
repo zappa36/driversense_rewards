@@ -211,16 +211,24 @@ function startGeolocation() {
         if (chip) chip.textContent = res.area.toUpperCase().slice(0, 16);
       }
     });
-  }, () => geoFallback(), { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
+  }, err => geoFallback(err), { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
 }
 
-function geoFallback() {
+function geoFallback(err) {
   geo = null;
   geoAddr = null;
   geoState = 'off';
   geoSettled();
-  setTagChips('GPS OFF · TAP TO RETRY');
-  document.getElementById('tag-gps-note').textContent = 'DEMO LOCATION · ALLOW LOCATION & TAP THE GPS CHIP';
+  /* Say WHY it failed: 1 = permission, 2 = no position source, 3 = timeout */
+  const code = err && err.code;
+  const chip = code === 1 ? 'GPS BLOCKED · TAP TO RETRY'
+    : code === 2 ? 'NO GPS SIGNAL · TAP TO RETRY'
+      : code === 3 ? 'GPS TIMEOUT · TAP TO RETRY'
+        : 'GPS OFF · TAP TO RETRY';
+  const note = code === 1 ? 'ALLOW LOCATION FOR THIS SITE, THEN TAP THE GPS CHIP'
+    : 'DEMO LOCATION · TAP THE GPS CHIP TO RETRY';
+  setTagChips(chip);
+  document.getElementById('tag-gps-note').textContent = note;
   document.getElementById('tag-addr').textContent = DEMO_SPOT.addr;
 }
 
