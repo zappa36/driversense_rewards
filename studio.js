@@ -36,7 +36,6 @@ const state = {
 };
 
 /* ---------- static data ---------- */
-const ZONE_OPTS = ['Prenzlauer Berg', 'Mitte', 'Pankow', 'Weißensee', 'Gesundbrunnen', 'Wedding', 'Your route'];
 const UNIT_OPTS = [
   { v: 'STOPS', l: 'Verify stops' }, { v: 'CODES', l: 'Confirm door codes' }, { v: 'PHOTOS', l: 'Safe-drop photos' },
   { v: 'NOTES', l: 'Voice notes' }, { v: 'RIDES', l: 'New-zone rides' }, { v: 'DOCKS', l: 'Map loading docks' },
@@ -92,10 +91,15 @@ function scheduleAddrLookup(q) {
     try {
       const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&bounds=52.33,13.08%7C52.68,13.77&key=${GMAPS}`);
       const d = await r.json();
+      const areaOf = res => {
+        const comp = t => { const c = (res.address_components || []).find(x => x.types.includes(t)); return c ? c.long_name : null; };
+        return comp('sublocality_level_1') || comp('sublocality') || comp('neighborhood') || comp('locality');
+      };
       addrSuggestions = (d.status === 'OK' ? d.results.slice(0, 4) : []).map(res => ({
         label: res.formatted_address,
         lat: res.geometry.location.lat,
         lng: res.geometry.location.lng,
+        area: areaOf(res),
       }));
     } catch { addrSuggestions = []; }
     render();
@@ -290,11 +294,26 @@ function renderEditor() {
       <div style="${LABEL}">DRIVER-FACING DESCRIPTION</div>
       <textarea data-input="desc" rows="2" style="${FIELD}resize:vertical;padding:11px 13px;color:#cdd6e2;font-family:'Saira',sans-serif;font-size:13.5px;line-height:1.5;">${esc(f.desc)}</textarea>
     </div>
-    <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-      <div>
-        <div style="${LABEL}">ZONE</div>
-        <select data-change="zone" style="${FIELD}font-family:'Saira',sans-serif;font-size:13.5px;">${options(ZONE_OPTS.map(z => ({ v: z, l: z })), f.zone)}</select>
+    <div style="margin-top:16px;">
+      <div style="${LABEL}">PLACE · ADDRESS${GMAPS ? ` <span style="color:#5f6e80;">· GOOGLE MAPS LOOKUP</span>` : ''}</div>
+      <div style="position:relative;">
+        <input data-input="addr" value="${esc(f.addr || '')}" placeholder="${GMAPS ? 'Search a real address — e.g. Rykestraße 21' : 'Address label shown on the driver card'}" autocomplete="off" style="${FIELD}padding:11px 13px;font-family:'Saira',sans-serif;font-size:13.5px;">
+        ${addrSuggestions.length ? `<div style="position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:20;border-radius:12px;border:1px solid rgba(4,152,186,.4);background:rgba(7,13,22,.97);overflow:hidden;box-shadow:0 18px 40px -12px rgba(0,0,0,.8);">
+          ${addrSuggestions.map((s, i) => `<div data-action="pick-addr" data-i="${i}" style="display:flex;align-items:center;gap:9px;padding:10px 13px;cursor:pointer;border-bottom:1px solid rgba(140,165,200,.08);" onmouseover="this.style.background='rgba(4,152,186,.12)'" onmouseout="this.style.background='transparent'">
+            <span class="msr fill" style="font-size:15px;color:#3cc0e0;pointer-events:none;">location_on</span>
+            <span style="flex:1;font-family:'Saira',sans-serif;font-size:13px;color:#dfe6ee;pointer-events:none;">${esc(s.label)}</span>
+          </div>`).join('')}
+        </div>` : ''}
       </div>
+      ${f.lat != null && f.lng != null ? `
+      <div style="margin-top:9px;display:flex;align-items:center;gap:10px;">
+        <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:7px;background:rgba(95,224,180,.09);${MONO}font-size:10px;color:#5fe0b4;"><span class="msr fill" style="font-size:12px;">location_on</span>${(+f.lat).toFixed(5)}, ${(+f.lng).toFixed(5)}</span>
+        <span style="${MONO}font-size:9px;letter-spacing:.08em;color:#6f7c8e;">ZONE AUTO-SET · ${esc(String(f.zone || '').toUpperCase())}</span>
+        <span data-action="clear-addr" style="margin-left:auto;cursor:pointer;${MONO}font-size:10px;letter-spacing:.08em;color:#8b97a8;">CLEAR</span>
+      </div>
+      ${GMAPS ? `<div style="margin-top:9px;border-radius:12px;overflow:hidden;border:1px solid rgba(140,165,200,.15);"><img src="https://maps.googleapis.com/maps/api/streetview?size=640x160&location=${f.lat},${f.lng}&fov=80&key=${GMAPS}" alt="Street View preview" loading="lazy" style="display:block;width:100%;height:118px;object-fit:cover;" onerror="this.parentElement.style.display='none'"></div>` : ''}` : ''}
+    </div>
+    <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
       <div>
         <div style="${LABEL}">TASK TYPE</div>
         <select data-change="unit" style="${FIELD}font-family:'Saira',sans-serif;font-size:13.5px;">${options(UNIT_OPTS, f.unit)}</select>
@@ -315,25 +334,6 @@ function renderEditor() {
         <div style="${LABEL}">BONUS XP</div>
         <input data-change="xp" type="number" min="0" step="10" value="${f.xp}" style="${FIELD}${MONO}font-size:13px;">
       </div>
-    </div>
-    <div style="margin-top:16px;">
-      <div style="${LABEL}">PLACE · ADDRESS${GMAPS ? ` <span style="color:#5f6e80;">· GOOGLE MAPS LOOKUP</span>` : ''}</div>
-      <div style="position:relative;">
-        <input data-input="addr" value="${esc(f.addr || '')}" placeholder="${GMAPS ? 'Search a real address — e.g. Rykestraße 21' : 'Address label shown on the driver card'}" autocomplete="off" style="${FIELD}padding:11px 13px;font-family:'Saira',sans-serif;font-size:13.5px;">
-        ${addrSuggestions.length ? `<div style="position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:20;border-radius:12px;border:1px solid rgba(4,152,186,.4);background:rgba(7,13,22,.97);overflow:hidden;box-shadow:0 18px 40px -12px rgba(0,0,0,.8);">
-          ${addrSuggestions.map((s, i) => `<div data-action="pick-addr" data-i="${i}" style="display:flex;align-items:center;gap:9px;padding:10px 13px;cursor:pointer;border-bottom:1px solid rgba(140,165,200,.08);" onmouseover="this.style.background='rgba(4,152,186,.12)'" onmouseout="this.style.background='transparent'">
-            <span class="msr fill" style="font-size:15px;color:#3cc0e0;pointer-events:none;">location_on</span>
-            <span style="flex:1;font-family:'Saira',sans-serif;font-size:13px;color:#dfe6ee;pointer-events:none;">${esc(s.label)}</span>
-          </div>`).join('')}
-        </div>` : ''}
-      </div>
-      ${f.lat != null && f.lng != null ? `
-      <div style="margin-top:9px;display:flex;align-items:center;gap:10px;">
-        <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:7px;background:rgba(95,224,180,.09);${MONO}font-size:10px;color:#5fe0b4;"><span class="msr fill" style="font-size:12px;">location_on</span>${(+f.lat).toFixed(5)}, ${(+f.lng).toFixed(5)}</span>
-        <span style="${MONO}font-size:9px;letter-spacing:.08em;color:#6f7c8e;">SHOWN ON THE DRIVER CARD</span>
-        <span data-action="clear-addr" style="margin-left:auto;cursor:pointer;${MONO}font-size:10px;letter-spacing:.08em;color:#8b97a8;">CLEAR</span>
-      </div>
-      ${GMAPS ? `<div style="margin-top:9px;border-radius:12px;overflow:hidden;border:1px solid rgba(140,165,200,.15);"><img src="https://maps.googleapis.com/maps/api/streetview?size=640x160&location=${f.lat},${f.lng}&fov=80&key=${GMAPS}" alt="Street View preview" loading="lazy" style="display:block;width:100%;height:118px;object-fit:cover;" onerror="this.parentElement.style.display='none'"></div>` : ''}` : ''}
     </div>
     <div style="margin-top:18px;display:flex;align-items:center;gap:26px;">
       <div>
@@ -579,6 +579,7 @@ const clickActions = {
       c.addr = s.label.split(',')[0]; /* short label for the driver card chip */
       c.lat = s.lat;
       c.lng = s.lng;
+      if (s.area) c.zone = s.area; /* zone follows the picked place */
       persistChallenge(c.id);
     }
     addrSuggestions = [];
@@ -626,7 +627,6 @@ const clickActions = {
 /* Selects and number fields commit on change. */
 const changeActions = {
   status: v => updSel('status', v),
-  zone: v => updSel('zone', v),
   unit: v => updSel('unit', v),
   goal: v => updSel('goal', Math.max(1, num(v, true))),
   days: v => updSel('days', Math.max(1, num(v, true))),
