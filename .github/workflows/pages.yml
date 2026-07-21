@@ -22,6 +22,11 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Stamp asset versions (cache busting)
+        run: |
+          SHA="${GITHUB_SHA::8}"
+          sed -i -E "s/(src|href)=\"([A-Za-z0-9_-]+\.(js|css))\"/\1=\"\2?v=$SHA\"/g" *.html
+          grep -o 'src="[^"]*\.js[^"]*"' index.html | head -5
       - uses: actions/configure-pages@v5
         with:
           enablement: true
