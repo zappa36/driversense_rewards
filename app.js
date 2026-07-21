@@ -870,11 +870,18 @@ function applyRemoteChallenges(rows) {
     ALL_CHALLENGES = {};
     return;
   }
-  /* The highest-paying live challenge headlines as the weekend special. */
+  /* The highest-paying live challenge headlines as the weekend special —
+   * but only when there are others to fill the grid; a lone live
+   * challenge stays in the grid so the dashboard is never empty. */
   const sorted = [...live].sort((a, b) => b.value * (b.boost ? MULT : 1) - a.value * (a.boost ? MULT : 1));
-  SPECIAL = { ...toDriverChal(sorted[0], 0), left: `${sorted[0].days}D LEFT`, patch: PATCHES.c0 };
-  CHALLENGES = sorted.slice(1).map((c, i) => toDriverChal(c, i));
-  ALL_CHALLENGES = Object.fromEntries([SPECIAL, ...CHALLENGES].map(c => [c.id, c]));
+  if (sorted.length === 1) {
+    SPECIAL = null;
+    CHALLENGES = [toDriverChal(sorted[0], 0)];
+  } else {
+    SPECIAL = { ...toDriverChal(sorted[0], 0), left: `${sorted[0].days}D LEFT`, patch: PATCHES.c0 };
+    CHALLENGES = sorted.slice(1).map((c, i) => toDriverChal(c, i));
+  }
+  ALL_CHALLENGES = Object.fromEntries([SPECIAL, ...CHALLENGES].filter(Boolean).map(c => [c.id, c]));
 }
 
 /* ---------- boot ---------- */
