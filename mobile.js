@@ -219,8 +219,8 @@ function geoFallback() {
   geoAddr = null;
   geoState = 'off';
   geoSettled();
-  setTagChips('GPS OFF · DEMO SPOT');
-  document.getElementById('tag-gps-note').textContent = 'DEMO LOCATION · KOLLWITZKIEZ';
+  setTagChips('GPS OFF · TAP TO RETRY');
+  document.getElementById('tag-gps-note').textContent = 'DEMO LOCATION · ALLOW LOCATION & TAP THE GPS CHIP';
   document.getElementById('tag-addr').textContent = DEMO_SPOT.addr;
 }
 
@@ -388,6 +388,9 @@ document.getElementById('phone-screen').addEventListener('click', e => {
       act.classList.add('vote-picked');
       break;
     }
+    case 'gps-retry':
+      if (geoState !== 'locating') startGeolocation();
+      break;
     case 'tag-save':
       saveTaggedPlace();
       break;
