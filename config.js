@@ -15,3 +15,11 @@
 
 window.SUPABASE_URL = 'https://ocdiaspdwnmfkiatlouk.supabase.co';
 window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jZGlhc3Bkd25tZmtpYXRsb3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NTg0NjIsImV4cCI6MjEwMDAzNDQ2Mn0.aUwTqGQulD5kbHgEGtmUbAGtlqkmXbpYiszs5XaILU0';
+
+/* Google Maps Platform key (client-side by design — restrict it to this
+ * site's HTTP referrer in the Google Cloud console). Drives Street View
+ * imagery + Maps Embed in the driver app and reverse geocoding in the
+ * mobile app. Requires billing enabled on the Google Cloud project and
+ * these APIs activated: Street View Static API, Maps Embed API,
+ * Geocoding API. */
+window.GMAPS_KEY = 'AIzaSyB09d-sZZjOjSSCj1dF5eKoH0Y6qU3iySs';

@@ -233,6 +233,30 @@ function geoFallback(err) {
 }
 
 async function reverseGeocode({ lat, lng }) {
+  /* Google Geocoding when a key is configured (better street-level
+   * coverage worldwide), OpenStreetMap Nominatim as fallback. */
+  const gkey = window.GMAPS_KEY || '';
+  if (gkey) {
+    try {
+      const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${gkey}`);
+      if (r.ok) {
+        const d = await r.json();
+        if (d.status === 'OK' && d.results && d.results.length) {
+          const comp = type => {
+            for (const res of d.results) {
+              const c = (res.address_components || []).find(x => x.types.includes(type));
+              if (c) return c.long_name;
+            }
+            return null;
+          };
+          const road = comp('route');
+          const num = comp('street_number');
+          const area = comp('neighborhood') || comp('sublocality_level_1') || comp('sublocality') || comp('locality');
+          if (road) return { street: num ? `${road} ${num}` : road, area };
+        }
+      }
+    } catch { /* fall through to Nominatim */ }
+  }
   try {
     const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18`);
     if (!r.ok) return null;
