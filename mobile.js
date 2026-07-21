@@ -166,9 +166,20 @@ function ottoStart() { beat = 0; renderOtto(); scheduleOtto(); }
 function ottoStop() { clearTimeout(ottoTimer); clearTimeout(levelTimer); }
 
 /* ---------- phone GPS · tag-a-place ---------- */
-let geo = null;      // { lat, lng, acc } from the device
-let geoAddr = null;  // reverse-geocoded street ("Kollwitzstraße 18")
+let geo = null;            // { lat, lng, acc } from the device
+let geoAddr = null;        // reverse-geocoded street ("Kollwitzstraße 18")
+let geoState = 'idle';     // 'locating' | 'fix' | 'off'
+let geoWaiters = [];       // saves waiting for the fix to arrive
 const DEMO_SPOT = { lat: 52.5346, lng: 13.4109, acc: 4, addr: 'Kollwitzstraße 18' };
+
+const geoSettled = () => { geoWaiters.forEach(fn => fn()); geoWaiters = []; };
+/* Resolves when the GPS attempt has settled (fix or off), or after ms. */
+const waitForFix = (ms = 9000) => geoState !== 'locating'
+  ? Promise.resolve()
+  : new Promise(res => {
+      const t = setTimeout(res, ms);
+      geoWaiters.push(() => { clearTimeout(t); res(); });
+    });
 
 const setTagChips = text => {
   ['tag-acc-hud', 'tag-acc-sheet'].forEach(id => {
@@ -179,10 +190,13 @@ const setTagChips = text => {
 
 function startGeolocation() {
   if (!('geolocation' in navigator)) return geoFallback();
+  geoState = 'locating';
   setTagChips('LOCATING…');
   document.getElementById('tag-gps-note').textContent = 'WAITING FOR GPS FIX…';
   navigator.geolocation.getCurrentPosition(pos => {
     geo = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy || 0 };
+    geoState = 'fix';
+    geoSettled();
     setTagChips('GPS ±' + Math.max(1, Math.round(geo.acc)) + ' m');
     document.getElementById('tag-gps-note').textContent = `DROPPED AT ${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)}`;
     document.getElementById('tag-addr').textContent = `${geo.lat.toFixed(4)}°N, ${geo.lng.toFixed(4)}°E`;
@@ -203,6 +217,8 @@ function startGeolocation() {
 function geoFallback() {
   geo = null;
   geoAddr = null;
+  geoState = 'off';
+  geoSettled();
   setTagChips('GPS OFF · DEMO SPOT');
   document.getElementById('tag-gps-note').textContent = 'DEMO LOCATION · KOLLWITZKIEZ';
   document.getElementById('tag-addr').textContent = DEMO_SPOT.addr;
@@ -230,16 +246,30 @@ function localSavePlace(row) {
   } catch { /* private mode */ }
 }
 
-function saveTaggedPlace() {
-  const spot = geo || DEMO_SPOT;
-  const row = {
-    name: geoAddr || (geo ? `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}` : DEMO_SPOT.addr),
-    note: 'Tiny bakery — cash only, the cinnamon knots go fast',
-    lat: spot.lat,
-    lng: spot.lng,
-    accuracy: spot.acc != null ? Math.round(spot.acc * 10) / 10 : null,
-  };
+async function saveTaggedPlace() {
   const label = document.getElementById('tag-save-label');
+
+  /* Never silently save the demo spot while the fix is still coming in —
+   * wait for the GPS attempt to settle first. */
+  if (geoState === 'locating') {
+    label.textContent = 'Waiting for GPS…';
+    await waitForFix();
+  }
+
+  const row = geo
+    ? {
+        name: geoAddr || `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`,
+        note: 'Tiny bakery — cash only, the cinnamon knots go fast',
+        lat: geo.lat, lng: geo.lng,
+        accuracy: Math.round((geo.acc || 0) * 10) / 10,
+      }
+    : {
+        /* clearly marked so demo rows are never mistaken for real places */
+        name: `Demo spot (no GPS) · ${DEMO_SPOT.addr}`,
+        note: 'Saved without a GPS fix — demo location',
+        lat: DEMO_SPOT.lat, lng: DEMO_SPOT.lng, accuracy: null,
+      };
+
   label.textContent = 'Saving…';
   const finish = shared => {
     label.textContent = shared ? 'Saved ✓' : 'Saved on this phone ✓';
