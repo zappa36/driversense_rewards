@@ -32,7 +32,7 @@ const state = {
     { id: 'c5', title: 'Safe Drop Scout', desc: 'Photograph agreed safe-drop points at six stops missing one.', zone: 'Pankow', tier: 'EASY', unit: 'PHOTOS', goal: 6, days: 4, value: 4.6, xp: 110, boost: false, status: 'SCHEDULED' },
     { id: 'c6', title: 'District Master: Prenzlauer Berg', desc: 'Own your home zone this weekend — leave every stop verified, coded and noted.', zone: 'Prenzlauer Berg', tier: 'EPIC', unit: 'STOPS', goal: 12, days: 2, value: 15, xp: 400, boost: true, status: 'DRAFT' },
   ],
-  logic: { mode: 'euro', weekendOn: true, weekendMult: 1.5, s3: 2.2, s7: 3.5, s14: 5, cashMin: 25, dailyCap: 15, autoConf: 90, photoTier: 'EPIC', budget: 1800, spent: 642 },
+  logic: { mode: 'euro', s3: 2.2, s7: 3.5, s14: 5, cashMin: 25, dailyCap: 15, autoConf: 90, photoTier: 'EPIC', budget: 1800, spent: 642 },
 };
 
 /* ---------- static data ---------- */
@@ -63,16 +63,12 @@ const num = (raw, int) => {
   const n = isNaN(v) ? 0 : v;
   return Math.max(0, int ? Math.round(n) : n);
 };
-const eff = c => c.value * (c.boost && state.logic.weekendOn ? state.logic.weekendMult : 1);
+const eff = c => c.value;
 const estCost = c => props.hubDrivers * (TAKEUP_RATES[c.tier] || .45) * eff(c);
 const projected = () => state.logic.spent + state.chals.filter(c => c.status === 'LIVE').reduce((a, c) => a + estCost(c), 0);
 
 const options = (list, cur) => list.map(o => `<option value="${esc(o.v)}"${o.v === cur ? ' selected' : ''}>${esc(o.l)}</option>`).join('');
 
-const toggle = (action, on) =>
-  `<div data-action="${action}" style="position:relative;flex:none;width:40px;height:22px;border-radius:999px;cursor:pointer;transition:background .15s;${on ? 'background:rgba(95,224,180,.55);' : 'background:rgba(140,165,200,.25);'}">
-    <span style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#eef2f7;transition:transform .15s;${on ? 'transform:translateX(18px);' : ''}"></span>
-  </div>`;
 
 let idSeq = Date.now();
 const newId = () => 'c' + (++idSeq);
@@ -351,7 +347,7 @@ function renderSidecar() {
       <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;color:#94a1b2;"><span>Est. take-up</span><span style="${MONO}color:#cdd6e2;">${Math.round(rate * 100)}% × ${props.hubDrivers} DRIVERS</span></div>
       <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;color:#94a1b2;"><span>Payout / completion</span><span style="${MONO}color:#cdd6e2;">${fmt(effV)}</span></div>
       <div style="display:flex;justify-content:space-between;padding:7px 0 0;margin-top:5px;border-top:1px solid rgba(140,165,200,.12);font-size:12.5px;color:#cdd6e2;"><span style="font-weight:600;">Est. total cost</span><span style="${MONO}font-weight:700;color:#5fe0b4;">${fmt(estCost(f))}</span></div>
-      <div style="margin-top:8px;${MONO}font-size:9px;letter-spacing:.08em;color:#6f7c8e;">${f.boost && L.weekendOn ? `INCLUDES WEEKEND ×${L.weekendMult} · CAP ${fmt(L.dailyCap)}/DAY` : `CAP ${fmt(L.dailyCap)}/DAY/DRIVER`}</div>
+      <div style="margin-top:8px;${MONO}font-size:9px;letter-spacing:.08em;color:#6f7c8e;">CAP ${fmt(L.dailyCap)}/DAY/DRIVER</div>
     </div>`;
   return `
   <div style="display:flex;flex-direction:column;gap:14px;">
@@ -364,7 +360,7 @@ function renderSidecar() {
         <div style="margin-top:6px;font-size:12px;line-height:1.5;color:#94a1b2;">${esc(f.desc)}</div>
         <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(140,165,200,.12);display:flex;align-items:baseline;justify-content:space-between;">
           <span style="${MONO}font-size:14px;font-weight:700;color:#5fe0b4;">${fmt(effV)}</span>
-          <span style="${MONO}font-size:10px;letter-spacing:.1em;color:#8b97a8;">+${Math.round(f.xp * (f.boost && L.weekendOn ? L.weekendMult : 1))} XP</span>
+          <span style="${MONO}font-size:10px;letter-spacing:.1em;color:#8b97a8;">+${f.xp} XP</span>
         </div>
       </div>
     </div>
@@ -411,18 +407,6 @@ function renderLogicTab() {
           <div data-action="mode-points" style="${modeCard(L.mode === 'points')}">
             <div style="${COND}font-weight:700;font-size:16px;color:#cdd6e2;">Points</div>
             <div style="margin-top:3px;font-size:12px;color:#94a1b2;">100 P = € 1.00 · spent in the rewards shop only.</div>
-          </div>
-        </div>
-        <div style="margin-top:22px;padding-top:18px;border-top:1px solid rgba(140,165,200,.12);">
-          <div style="display:flex;align-items:center;gap:12px;">
-            ${toggle('toggle-wk', L.weekendOn)}
-            <div style="flex:1;">
-              <div style="${COND}font-weight:600;font-size:14.5px;">Weekend boost</div>
-              <div style="font-size:12px;color:#7b8799;">Multiplies reward + XP on boost-eligible challenges, Sat–Sun.</div>
-            </div>
-            <select data-change="wkmult" style="width:92px;flex:none;padding:9px 10px;border-radius:10px;border:1px solid rgba(245,197,66,.35);background:rgba(7,13,22,.6);color:#ffd95e;${MONO}font-size:12px;font-weight:700;outline:none;">
-              ${options([{ v: '1.25', l: '×1.25' }, { v: '1.5', l: '×1.5' }, { v: '2', l: '×2' }], String(L.weekendMult))}
-            </select>
           </div>
         </div>
       </div>
@@ -622,7 +606,6 @@ const clickActions = {
   },
   'mode-euro'() { state.logic.mode = 'euro'; persistLogic(); render(); },
   'mode-points'() { state.logic.mode = 'points'; persistLogic(); render(); },
-  'toggle-wk'() { state.logic.weekendOn = !state.logic.weekendOn; persistLogic(); render(); },
   signout() { AUTH.signOut(); authError = false; render(); },
 };
 
@@ -634,7 +617,6 @@ const changeActions = {
   days: v => updSel('days', Math.max(1, num(v, true))),
   value: v => updSel('value', num(v)),
   xp: v => updSel('xp', num(v, true)),
-  wkmult: v => { state.logic.weekendMult = parseFloat(v); persistLogic(); render(); },
   s3: v => { state.logic.s3 = num(v); persistLogic(); render(); },
   s7: v => { state.logic.s7 = num(v); persistLogic(); render(); },
   s14: v => { state.logic.s14 = num(v); persistLogic(); render(); },

@@ -381,16 +381,15 @@ function loadSeasonChallenges() {
   Promise.all([DB.listChallenges(false), DB.fetchSettings()]).then(([rows, settingsRow]) => {
     const live = (rows || []).map(DB.rowToChal).filter(c => c.status === 'LIVE');
     if (!live.length) return; // keep the design's static list
-    const L = settingsRow ? DB.rowToLogic(settingsRow) : { mode: 'euro', weekendOn: true, weekendMult: 1.5 };
+    const L = settingsRow ? DB.rowToLogic(settingsRow) : { mode: 'euro' };
     const fmt = v => L.mode === 'points' ? Math.round(v * 100) + ' P' : '€ ' + v.toFixed(2);
-    const eff = c => c.value * (c.boost && L.weekendOn ? L.weekendMult : 1);
 
     document.getElementById('season-list-header').textContent = 'LIVE CHALLENGES · FROM THE HUB';
     document.getElementById('season-challenges').innerHTML = live.slice(0, 4).map(c => `
     <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:11px;background:rgba(255,255,255,.022);border:1px solid rgba(140,165,200,.1);">
       <span style="flex:none;width:30px;height:30px;border-radius:9px;background:rgba(95,224,180,.12);display:flex;align-items:center;justify-content:center;"><span class="msr fill" style="font-size:17px;color:#7ce0b8;">${UNIT_ICONS[c.unit] || 'pin_drop'}</span></span>
       <span style="flex:1;min-width:0;font-family:'Saira',sans-serif;font-size:13px;color:#dfe6ee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${String(c.title).replace(/</g, '&lt;')}</span>
-      <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.06em;color:#7ce0b8;">${fmt(eff(c))} · +${Math.round(c.xp * (c.boost && L.weekendOn ? L.weekendMult : 1))} XP</span>
+      <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.06em;color:#7ce0b8;">${fmt(c.value)} · +${c.xp} XP</span>
     </div>`).join('');
   }).catch(() => { /* offline — keep the static list */ });
 }

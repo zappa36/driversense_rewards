@@ -11,13 +11,11 @@
 
 /* ---------- configuration (design props, overridable via URL) ----------
  * ?mode=points   pay in points instead of euros
- * ?boost=0       disable the weekend ×1.5 boost
  * ?streak=9      reporting-streak day count (3–30)
  */
 const params = new URLSearchParams(location.search);
 const props = {
   payoutMode: params.get('mode') === 'points' ? 'points' : 'euro',
-  weekendBoost: params.get('boost') !== '0',
   streakDays: Math.min(30, Math.max(3, parseInt(params.get('streak'), 10) || 6)),
 };
 
@@ -31,7 +29,6 @@ const GMAPS_KEY = params.get('gkey') || window.GMAPS_KEY || '';
 
 /* Mutable when Supabase settings load (see applySettings). */
 let TARGET = 25;
-let MULT = props.weekendBoost ? 1.5 : 1;
 
 /* ---------- state ---------- */
 const state = {
@@ -171,11 +168,6 @@ function stopTagStyle(tag) {
   return `flex:none;padding:3px 9px;border-radius:6px;background:${bg};${MONO}font-size:9.5px;letter-spacing:.1em;color:${col};`;
 }
 
-/* Effective multiplier for one challenge: built-ins have no boost flag
- * (undefined -> eligible, matching the original design); Supabase rows
- * carry explicit eligibility from the studio. */
-const chalMult = c => (c.boost === false ? 1 : MULT);
-
 /* Challenge view-model: state flags, payout labels, patch + tier styles. */
 function chalVm(c) {
   const a = ACCENTS[c.tone];
@@ -189,8 +181,8 @@ function chalVm(c) {
     tierStyle: tierChipStyle(c.tier),
     patchStyle: `position:absolute;z-index:2;display:flex;align-items:center;justify-content:center;border:1.5px dashed rgba(${a.rgb},.65);border-radius:6px;background:repeating-linear-gradient(45deg,rgba(${a.rgb},.12) 0 6px,rgba(${a.rgb},.02) 6px 12px);${c.patch || PATCHES[c.id] || PATCHES.c1}`,
     meta: `${c.zone} · ${c.unit} · ${c.left}`,
-    xpLabel: '+' + Math.round(c.xp * chalMult(c)) + ' XP',
-    rewardLabel: fmt(c.value * chalMult(c)),
+    xpLabel: '+' + c.xp + ' XP',
+    rewardLabel: fmt(c.value),
     showStart: !started,
     showProg: started && !complete,
     showClaim: complete && !claimed,
@@ -239,7 +231,7 @@ function computeVm() {
     ...selRaw, pctLabel: selRaw.pct + '%', pctW: selRaw.pct + '%',
     badgeNote: `LOCAL EXPERT BADGE AT 100% · +${fmt(5.00)} BONUS`,
     stopsLabel: `${selRaw.stops.length} STOPS NEED YOU${selRaw.boosted ? ' · PAYOUTS COUNT DOUBLE XP' : ''}`,
-    stops: selRaw.stops.map(st => ({ ...st, reward: fmt(st.v * (selRaw.boosted ? MULT : 1)), tagStyle: stopTagStyle(st.tag) })),
+    stops: selRaw.stops.map(st => ({ ...st, reward: fmt(st.v), tagStyle: stopTagStyle(st.tag) })),
   };
 
   const shop = SHOP_ITEMS.map(t => {
@@ -269,7 +261,6 @@ function computeVm() {
 
   return {
     page: s.page,
-    boostOn: props.weekendBoost,
     balanceLabel: fmt(s.balance),
     targetLabel: fmt(TARGET),
     pctW: Math.min(100, (s.balance / TARGET) * 100).toFixed(1) + '%',
@@ -443,7 +434,6 @@ function renderDashboard(vm) {
     <div style="margin-top:56px;">
       <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:18px;">
         <span style="${COND}font-weight:700;font-size:22px;">Live challenges</span>
-        ${vm.boostOn ? `<span style="${MONO}font-size:11px;color:#ffd95e;">WEEKEND ×${MULT} UNTIL SUN</span>` : ''}
         <span data-action="nav" data-page="challenges" style="margin-left:auto;cursor:pointer;${MONO}font-size:11px;letter-spacing:.08em;color:#3cc0e0;">VIEW ALL →</span>
       </div>
       ${vm.featured.length ? `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;">
@@ -527,7 +517,7 @@ function renderSpecialBanner(vm) {
   const sp = vm.sp;
   let controls;
   if (sp.showStart) {
-    controls = `<button data-action="start-chal" data-id="${sp.id}" class="hover-lift" style="display:block;width:100%;margin-top:14px;padding:12px;border-radius:11px;border:none;background:linear-gradient(180deg,#ffd95e,#f3ac10);${COND}font-weight:700;font-size:14px;letter-spacing:.06em;color:#5a3d06;cursor:pointer;box-shadow:0 12px 26px -12px rgba(243,172,16,.6);">START THE WEEKEND RUN</button>`;
+    controls = `<button data-action="start-chal" data-id="${sp.id}" class="hover-lift" style="display:block;width:100%;margin-top:14px;padding:12px;border-radius:11px;border:none;background:linear-gradient(180deg,#ffd95e,#f3ac10);${COND}font-weight:700;font-size:14px;letter-spacing:.06em;color:#5a3d06;cursor:pointer;box-shadow:0 12px 26px -12px rgba(243,172,16,.6);">START THIS CHALLENGE</button>`;
   } else if (sp.showProg) {
     controls = `<div style="margin-top:18px;display:flex;align-items:center;gap:10px;">
         <div style="flex:1;height:7px;border-radius:4px;background:rgba(140,165,200,.14);overflow:hidden;">
@@ -546,7 +536,7 @@ function renderSpecialBanner(vm) {
     <div style="flex:1;min-width:0;">
       <div style="display:flex;align-items:center;gap:10px;">
         <span style="${sp.tierStyle}">${sp.tier}</span>
-        <span style="${MONO}font-size:10px;letter-spacing:.16em;color:#c9a85c;">WEEKEND SPECIAL · ${sp.left}</span>
+        <span style="${MONO}font-size:10px;letter-spacing:.16em;color:#c9a85c;">FEATURED · ${sp.left}</span>
       </div>
       <div style="margin-top:12px;${COND}font-weight:700;font-size:30px;line-height:1.05;">${sp.title}</div>
       <div style="margin-top:8px;max-width:520px;font-size:14px;line-height:1.55;color:#94a1b2;">${sp.desc}</div>
@@ -579,7 +569,6 @@ function renderChallenges(vm) {
       </div>
       <div style="flex:none;text-align:right;padding-bottom:4px;">
         <div style="${MONO}font-size:11px;color:#6f7c8e;">${vm.chalStatLabel}</div>
-        ${vm.boostOn ? `<div style="margin-top:5px;${MONO}font-size:11px;color:#ffd95e;">WEEKEND ×${MULT} ON ALL PAYOUTS · ENDS SUN 24:00</div>` : ''}
       </div>
     </div>
     ${vm.sp ? renderSpecialBanner(vm) : ''}
@@ -781,7 +770,7 @@ const actions = {
   'claim-chal'(d) {
     const c = ALL_CHALLENGES[d.id];
     if (!c || state.claimed[c.id]) return;
-    addBalance(c.value * chalMult(c));
+    addBalance(c.value);
     state.claimed[c.id] = true;
     render();
   },
@@ -853,8 +842,6 @@ function toDriverChal(c, i) {
 
 function applySettings(L) {
   if (!params.has('mode')) props.payoutMode = L.mode;
-  if (!params.has('boost')) props.weekendBoost = L.weekendOn;
-  MULT = props.weekendBoost ? L.weekendMult : 1;
   TARGET = L.cashMin;
   CLAIM_ROWS[0].v = L.s3;
   CLAIM_ROWS[2].v = L.s7;
@@ -870,10 +857,10 @@ function applyRemoteChallenges(rows) {
     ALL_CHALLENGES = {};
     return;
   }
-  /* The highest-paying live challenge headlines as the weekend special —
+  /* The highest-paying live challenge headlines as the featured special —
    * but only when there are others to fill the grid; a lone live
    * challenge stays in the grid so the dashboard is never empty. */
-  const sorted = [...live].sort((a, b) => b.value * (b.boost ? MULT : 1) - a.value * (a.boost ? MULT : 1));
+  const sorted = [...live].sort((a, b) => b.value - a.value);
   if (sorted.length === 1) {
     SPECIAL = null;
     CHALLENGES = [toDriverChal(sorted[0], 0)];

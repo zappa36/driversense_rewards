@@ -63,14 +63,14 @@ const DB = (() => {
     addr: c.addr ?? null, lat: c.lat ?? null, lng: c.lng ?? null,
   });
   const rowToLogic = r => ({
-    mode: r.mode, weekendOn: !!r.weekend_on, weekendMult: Number(r.weekend_mult),
+    mode: r.mode,
     s3: Number(r.s3), s7: Number(r.s7), s14: Number(r.s14),
     cashMin: Number(r.cash_min), dailyCap: Number(r.daily_cap),
     autoConf: Number(r.auto_conf), photoTier: r.photo_tier,
     budget: Number(r.budget), spent: Number(r.spent),
   });
   const logicToRow = L => ({
-    mode: L.mode, weekend_on: L.weekendOn, weekend_mult: L.weekendMult,
+    mode: L.mode,
     s3: L.s3, s7: L.s7, s14: L.s14, cash_min: L.cashMin, daily_cap: L.dailyCap,
     auto_conf: L.autoConf, photo_tier: L.photoTier, budget: L.budget, spent: L.spent,
   });

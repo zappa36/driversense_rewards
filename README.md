@@ -17,7 +17,7 @@ Driver app (`index.html`):
 
 - **Dashboard** — balance, cashout progress, claimable rewards, featured
   challenges, zone mastery overview, and a reward shop.
-- **Challenges** — the weekend special banner plus six live challenges.
+- **Challenges** — the featured challenge banner plus six live challenges.
   Starting a challenge simulates live tracking (progress ticks in ~1.1s steps),
   then the payout can be claimed into the balance.
 - **Zones** — zone mastery list with per-zone stops that need attention.
@@ -46,17 +46,17 @@ single-phone prototype with eight connected screens:
   qualifies.
 - On a phone-sized viewport the app runs full-bleed; on desktop it's a
   centered phone. When Supabase is configured, the Season screen lists the
-  **LIVE challenges published in Challenge Studio** with boost-adjusted
-  rewards; otherwise it falls back to the design's static content.
+  **LIVE challenges published in Challenge Studio** with reward and XP
+  labels; otherwise it falls back to the design's static content.
 
 Planner console (`challenge-studio.html`, from `Challenge Studio.dc.html`):
 
 - **Challenges tab** — challenge library with a full editor (title, status,
-  description, zone, task type, goal, duration, reward, XP, tier, boost
-  eligibility), a live driver-card preview, and per-challenge cost economics.
+  description, address with Google Maps lookup, task type, goal, duration,
+  reward, XP), a live driver-card preview, and per-challenge cost economics.
   Supports publish/unpublish, duplicate, archive and new drafts.
 - **Reward logic tab** — hub-wide rules: payout currency (euro/points),
-  weekend boost multiplier, reporting-streak ladder, cashout minimum and
+  reporting-streak ladder, cashout minimum and
   daily cap, verification guardrails, and a season budget with a live
   projection bar fed by the estimated cost of all LIVE challenges.
 
@@ -79,7 +79,6 @@ The design's props are exposed as URL query parameters:
 | Page                    | Parameter | Values            | Default | Effect                              |
 |-------------------------|-----------|-------------------|---------|-------------------------------------|
 | `index.html`            | `mode`    | `euro` / `points` | `euro`  | Show payouts in euros or points     |
-| `index.html`            | `boost`   | `1` / `0`         | `1`     | Weekend ×1.5 payout boost on/off    |
 | `index.html`            | `streak`  | `3`–`30`          | `6`     | Reporting-streak day count          |
 | `index.html`            | `gkey`    | API key           | —       | Google Maps API key (see below)     |
 | `challenge-studio.html` | `drivers` | `5`–`200`         | `24`    | Hub driver count for cost estimates |
@@ -88,7 +87,7 @@ The design's props are exposed as URL query parameters:
 | `mobile.html`           | `coin`    | hex color         | `#FFCC00` | Coin/gold accent color            |
 | `mobile.html`           | `gamify`  | `1` / `0`         | `1`     | Show/hide gamification chrome       |
 
-Example: `index.html?mode=points&boost=0&streak=9`
+Example: `index.html?mode=points&streak=9`
 
 ## Connecting to Supabase
 
@@ -120,8 +119,8 @@ That's it — the apps detect the configuration automatically:
   between planners.
 - The driver app loads **LIVE challenges** and the **reward rules** from the
   database on every visit. The highest-paying live challenge headlines as the
-  weekend special; publish/unpublish in the studio adds/removes cards in the
-  driver app. Weekend multiplier, cashout minimum, streak amounts, and
+  featured challenge; publish/unpublish in the studio adds/removes cards in
+  the driver app. Cashout minimum, streak amounts, and
   euro/points mode all follow the studio's Reward logic tab.
 - Drafts and scheduled challenges are **not readable anonymously** — that's
   enforced by the database, not the browser.
