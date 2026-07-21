@@ -276,13 +276,6 @@ function renderLibrary() {
 
 function renderEditor() {
   const f = sel();
-  const L = state.logic;
-  const tierPills = ['EASY', 'MEDIUM', 'EPIC'].map(t => {
-    const on = f.tier === t;
-    const [bg, col] = TIER_MAP[t];
-    return `<span data-action="pick-tier" data-tier="${t}" style="cursor:pointer;padding:7px 14px;border-radius:8px;${MONO}font-size:10px;letter-spacing:.12em;font-weight:700;transition:all .15s;${on ? `background:${bg};color:${col};box-shadow:inset 0 0 0 1px ${col};` : 'background:rgba(255,255,255,.03);color:#7b8799;box-shadow:inset 0 0 0 1px rgba(140,165,200,.18);'}">${t}</span>`;
-  }).join('');
-  const boostNote = f.boost ? (L.weekendOn ? `×${L.weekendMult} ON WEEKENDS` : 'BOOST PAUSED GLOBALLY') : 'BASE RATE ONLY';
   return `
   <div>
     <div style="display:flex;gap:12px;">
@@ -340,19 +333,6 @@ function renderEditor() {
       <div>
         <div style="${LABEL}">BONUS XP</div>
         <input data-change="xp" type="number" min="0" step="10" value="${f.xp}" style="${FIELD}${MONO}font-size:13px;">
-      </div>
-    </div>
-    <div style="margin-top:18px;display:flex;align-items:center;gap:26px;">
-      <div>
-        <div style="${LABEL}margin-bottom:8px;">DIFFICULTY TIER</div>
-        <div style="display:flex;gap:8px;">${tierPills}</div>
-      </div>
-      <div>
-        <div style="${LABEL}margin-bottom:8px;">WEEKEND BOOST ELIGIBLE</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          ${toggle('toggle-boost', f.boost)}
-          <span style="${MONO}font-size:10px;letter-spacing:.08em;color:${f.boost && L.weekendOn ? '#ffd95e' : '#6f7c8e'};">${boostNote}</span>
-        </div>
       </div>
     </div>
   </div>`;
@@ -598,8 +578,6 @@ const clickActions = {
     addrSuggestions = [];
     render();
   },
-  'pick-tier'(d) { updSel('tier', d.tier); },
-  'toggle-boost'() { updSel('boost', !sel().boost); },
   publish() { updSel('status', sel().status === 'LIVE' ? 'DRAFT' : 'LIVE'); },
   duplicate() {
     const src = sel();
