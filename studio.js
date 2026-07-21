@@ -244,6 +244,9 @@ function renderHeader() {
   </div>`;
 }
 
+let deletePending = null;
+let deleteTimer = null;
+
 function renderLibrary() {
   return `
   <div style="${CARD}overflow:hidden;">
@@ -254,6 +257,9 @@ function renderLibrary() {
     ${state.chals.map(c => {
       const [col, bg] = ST_MAP[c.status];
       const active = state.selId === c.id;
+      const del = deletePending === c.id
+        ? `<button data-action="delete-chal" data-id="${c.id}" title="Tap again to delete" style="flex:none;height:26px;padding:0 8px;border-radius:8px;border:1px solid rgba(255,107,107,.55);background:rgba(255,107,107,.14);color:#ff9b9b;cursor:pointer;display:flex;align-items:center;gap:4px;${MONO}font-size:9px;letter-spacing:.08em;font-weight:700;"><span class="msr fill" style="font-size:13px;pointer-events:none;">delete_forever</span>SURE?</button>`
+        : `<button data-action="delete-chal" data-id="${c.id}" title="Delete challenge" style="flex:none;width:26px;height:26px;border-radius:8px;border:1px solid rgba(140,165,200,.18);background:rgba(255,255,255,.03);color:#7b8799;cursor:pointer;display:flex;align-items:center;justify-content:center;"><span class="msr" style="font-size:14px;pointer-events:none;">delete</span></button>`;
       return `
       <div data-action="select-chal" data-id="${c.id}" style="display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;border-bottom:1px solid rgba(140,165,200,.09);${active ? 'background:rgba(4,152,186,.09);box-shadow:inset 2px 0 0 #3cc0e0;' : ''}">
         <span style="flex:none;width:8px;height:8px;border-radius:50%;background:${col};"></span>
@@ -262,6 +268,7 @@ function renderLibrary() {
           <div style="${MONO}font-size:9px;letter-spacing:.08em;color:#6f7c8e;margin-top:3px;">${c.tier} · ${fmt(c.value)} · ${esc(c.zone.toUpperCase())}</div>
         </div>
         <span style="flex:none;padding:3px 8px;border-radius:6px;${MONO}font-size:9px;letter-spacing:.12em;font-weight:700;background:${bg};color:${col};">${c.status}</span>
+        ${del}
       </div>`;
     }).join('')}
   </div>`;
@@ -608,6 +615,23 @@ const clickActions = {
     state.chals = state.chals.filter(c => c.id !== gone);
     state.selId = state.chals[0].id;
     persistDelete(gone);
+    render();
+  },
+  'delete-chal'(d) {
+    /* two-tap confirm: first tap arms the row for 3s, second tap deletes */
+    if (deletePending !== d.id) {
+      deletePending = d.id;
+      clearTimeout(deleteTimer);
+      deleteTimer = setTimeout(() => { deletePending = null; render(); }, 3000);
+      render();
+      return;
+    }
+    clearTimeout(deleteTimer);
+    deletePending = null;
+    if (state.chals.length < 2) { render(); return; }
+    state.chals = state.chals.filter(c => c.id !== d.id);
+    if (!state.chals.find(c => c.id === state.selId)) state.selId = state.chals[0].id;
+    persistDelete(d.id);
     render();
   },
   new() {
