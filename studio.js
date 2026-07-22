@@ -91,15 +91,39 @@ function scheduleAddrLookup(q) {
         const comp = t => { const c = (res.address_components || []).find(x => x.types.includes(t)); return c ? c.long_name : null; };
         return comp('sublocality_level_1') || comp('sublocality') || comp('neighborhood') || comp('locality');
       };
-      addrSuggestions = (d.status === 'OK' ? d.results.slice(0, 4) : []).map(res => ({
-        label: res.formatted_address,
-        lat: res.geometry.location.lat,
-        lng: res.geometry.location.lng,
-        area: areaOf(res),
-      }));
-    } catch { addrSuggestions = []; }
+      addrSuggestions = d.status === 'OK'
+        ? d.results.slice(0, 4).map(res => ({
+            label: res.formatted_address,
+            lat: res.geometry.location.lat,
+            lng: res.geometry.location.lng,
+            area: areaOf(res),
+          }))
+        : d.status === 'ZERO_RESULTS' ? [] : await nominatimLookup(q);
+    } catch { addrSuggestions = await nominatimLookup(q); }
     render();
   }, 650);
+}
+
+/* OpenStreetMap fallback when Google Geocoding rejects the key (the web
+ * service refuses referrer-restricted keys) or is unreachable. */
+async function nominatimLookup(q) {
+  try {
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=4&addressdetails=1'
+      + '&viewbox=13.08,52.68,13.77,52.33&q=' + encodeURIComponent(q));
+    if (!r.ok) return [];
+    return (await r.json()).map(res => {
+      const a = res.address || {};
+      const road = a.road || a.pedestrian || a.square || null;
+      const first = road ? (a.house_number ? `${road} ${a.house_number}` : road)
+        : (res.name || String(res.display_name || '').split(',')[0]);
+      return {
+        label: [first, a.suburb || a.city_district, a.city || a.town || a.village].filter(Boolean).join(', '),
+        lat: +res.lat,
+        lng: +res.lon,
+        area: a.suburb || a.city_district || a.neighbourhood || null,
+      };
+    });
+  } catch { return []; }
 }
 
 /* ---------- Supabase sync ---------- */
