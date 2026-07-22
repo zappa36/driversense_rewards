@@ -200,6 +200,7 @@ function startGeolocation() {
     setTagChips('GPS ±' + Math.max(1, Math.round(geo.acc)) + ' m');
     document.getElementById('tag-gps-note').textContent = `DROPPED AT ${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)}`;
     document.getElementById('tag-addr').textContent = `${geo.lat.toFixed(4)}°N, ${geo.lng.toFixed(4)}°E`;
+    updateLiveMaps();
     reverseGeocode(geo).then(res => {
       if (!res) return;
       if (res.street) {
@@ -219,6 +220,7 @@ function geoFallback(err) {
   geoAddr = null;
   geoState = 'off';
   geoSettled();
+  hideLiveMaps();
   /* Say WHY it failed: 1 = permission, 2 = no position source, 3 = timeout */
   const code = err && err.code;
   const chip = code === 1 ? 'GPS BLOCKED · TAP TO RETRY'
@@ -230,6 +232,61 @@ function geoFallback(err) {
   setTagChips(chip);
   document.getElementById('tag-gps-note').textContent = note;
   document.getElementById('tag-addr').textContent = DEMO_SPOT.addr;
+}
+
+/* ---------- live map · real Google Map centered on the device ---------- */
+/* When a Maps key is configured and the GPS fix arrives, the illustrated
+ * city under the map/tag HUDs is replaced by a real Maps Static API image
+ * centered on the phone's position (dark-styled to match the UI), and the
+ * avatar moves to the exact center — it IS the position marker. If the fix
+ * is lost, the key is missing, or the API rejects the request, the
+ * illustration stays/returns. */
+const MAP_STYLE = [
+  'feature:all|element:geometry|color:0x0e1b17',
+  'feature:all|element:labels.text.fill|color:0x6b8f85',
+  'feature:all|element:labels.text.stroke|color:0x081513',
+  'feature:all|element:labels.icon|visibility:off',
+  'feature:road|element:geometry|color:0x1e3a33',
+  'feature:road.arterial|element:geometry|color:0x24443c',
+  'feature:road.highway|element:geometry|color:0x2c5148',
+  'feature:water|element:geometry|color:0x0e3346',
+  'feature:poi.park|element:geometry|color:0x123f2c',
+  'feature:poi|element:labels|visibility:off',
+  'feature:transit|visibility:off',
+];
+const MAP_STYLE_QS = MAP_STYLE.map(s => 'style=' + encodeURIComponent(s)).join('&');
+
+const centerPlayer = on => {
+  const p = document.getElementById('map-player');
+  if (p) p.style.top = on ? '50%' : '57%'; // 57% = spot in the illustration
+};
+
+function updateLiveMaps() {
+  const gkey = window.GMAPS_KEY || '';
+  [['live-map', 17], ['live-map-tag', 18]].forEach(([id, zoom]) => {
+    const img = document.getElementById(id);
+    if (!img) return;
+    if (!gkey || !geo) { img.style.display = 'none'; return; }
+    img.onload = () => {
+      img.style.display = 'block';
+      if (id === 'live-map') centerPlayer(true);
+    };
+    img.onerror = () => {
+      img.style.display = 'none';
+      if (id === 'live-map') centerPlayer(false);
+    };
+    img.src = 'https://maps.googleapis.com/maps/api/staticmap'
+      + `?center=${geo.lat},${geo.lng}&zoom=${zoom}&size=390x640&scale=2`
+      + `&${MAP_STYLE_QS}&key=${gkey}`;
+  });
+}
+
+function hideLiveMaps() {
+  ['live-map', 'live-map-tag'].forEach(id => {
+    const img = document.getElementById(id);
+    if (img) { img.onerror = null; img.removeAttribute('src'); img.style.display = 'none'; }
+  });
+  centerPlayer(false);
 }
 
 async function reverseGeocode({ lat, lng }) {
@@ -433,3 +490,4 @@ renderOtto();
 renderPoints();
 renderLeaderboard();
 loadSeasonChallenges();
+startGeolocation(); // the map is the home screen — center it on the real position
