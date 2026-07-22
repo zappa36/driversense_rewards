@@ -157,10 +157,10 @@
           <div style="margin:4px auto 0;width:40px;height:13px;border-radius:50%;background:radial-gradient(circle,rgba(245,197,66,.4),transparent 70%);"></div>
         </div>
 
-        <!-- destination flagged building -->
-        <div data-nav="arrival" style="cursor:pointer;position:absolute;left:50%;top:27%;transform:translate(-50%,-100%);z-index:5;text-align:center;">
+        <!-- destination flagged building (repositioned to the nearest LIVE challenge on the live map) -->
+        <div id="map-flag" data-nav="arrival" style="cursor:pointer;position:absolute;left:50%;top:27%;transform:translate(-50%,-100%);z-index:5;text-align:center;">
           <div style="animation:bobble 3.2s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;">
-            <div style="font-family:'Saira Semi Condensed',sans-serif;font-weight:700;font-size:12px;color:#5a3d06;background:linear-gradient(180deg,#ffe79a,#f3ac10);padding:3px 11px;border-radius:8px;box-shadow:0 4px 10px rgba(245,172,16,.5);border:1.5px solid rgba(255,255,255,.5);white-space:nowrap;">Nº 47 · FLAGGED</div>
+            <div id="flag-label" style="font-family:'Saira Semi Condensed',sans-serif;font-weight:700;font-size:12px;color:#5a3d06;background:linear-gradient(180deg,#ffe79a,#f3ac10);padding:3px 11px;border-radius:8px;box-shadow:0 4px 10px rgba(245,172,16,.5);border:1.5px solid rgba(255,255,255,.5);white-space:nowrap;">Nº 47 · FLAGGED</div>
             <div style="position:relative;width:68px;height:68px;margin-top:5px;border-radius:19px;background:linear-gradient(180deg,rgba(255,143,143,.95),rgba(214,58,58,.95));border:2.5px solid rgba(255,255,255,.6);box-shadow:0 12px 28px rgba(214,58,58,.55),inset 0 2px 0 rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;overflow:hidden;">
               <span style="position:absolute;top:0;bottom:0;width:28px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);animation:sheen 3.4s ease-in-out infinite;"></span>
               <span class="msr fill" style="font-size:36px;color:#fff;">apartment</span>
@@ -188,8 +188,8 @@
           </div>
         </div>
 
-        <!-- other people nearby -->
-        <div style="position:absolute;left:20%;top:65%;transform:translate(-50%,-50%);z-index:6;text-align:center;">
+        <!-- other people nearby (illustration only) -->
+        <div class="design-pin" style="position:absolute;left:20%;top:65%;transform:translate(-50%,-50%);z-index:6;text-align:center;">
           <div style="animation:bobble2 3.6s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;gap:3px;">
             <div style="position:relative;width:58px;height:40px;transform:scale(.75);transform-origin:bottom center;">
               <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:38px;height:38px;border-radius:50%;background:linear-gradient(180deg,#b3a6ff,#8b7cff);border:2.5px solid #0d1622;box-shadow:0 5px 12px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;font-family:'Saira Semi Condensed',sans-serif;font-weight:700;font-size:14px;color:#1c1236;">LS</div>
@@ -199,7 +199,7 @@
           </div>
         </div>
 
-        <div style="position:absolute;left:59%;top:43%;transform:translate(-50%,-50%);z-index:6;text-align:center;">
+        <div class="design-pin" style="position:absolute;left:59%;top:43%;transform:translate(-50%,-50%);z-index:6;text-align:center;">
           <div style="animation:bobble2 3.9s ease-in-out infinite .3s;display:flex;flex-direction:column;align-items:center;gap:3px;">
             <div style="position:relative;width:58px;height:40px;transform:scale(.75);transform-origin:bottom center;">
               <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:38px;height:38px;border-radius:50%;background:linear-gradient(180deg,#ffc07a,#ff9d3d);border:2.5px solid #0d1622;box-shadow:0 5px 12px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;font-family:'Saira Semi Condensed',sans-serif;font-weight:700;font-size:14px;color:#3a2306;">AR</div>
@@ -225,10 +225,10 @@
             </div>
             <div style="flex:1;min-width:0;">
               <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px;">
-                <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;color:#ff9b9b;">FLAGGED · 40 m AHEAD</span>
+                <span id="flag-kicker" style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;color:#ff9b9b;">FLAGGED · 40 m AHEAD</span>
               </div>
-              <div style="font-family:'Saira Semi Condensed',sans-serif;font-weight:600;font-size:19px;line-height:1.02;color:#eef2f7;">Schönhauser Allee 47</div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;">
+              <div id="flag-title" style="font-family:'Saira Semi Condensed',sans-serif;font-weight:600;font-size:19px;line-height:1.02;color:#eef2f7;">Schönhauser Allee 47</div>
+              <div id="flag-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;">
                 <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:7px;background:rgba(255,255,255,.05);border:1px solid rgba(140,165,200,.18);font-family:'JetBrains Mono',monospace;font-size:10px;color:#cdd6e2;"><span class="msr" style="font-size:12px;">bookmark</span>Saved by 12</span>
                 <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:7px;background:rgba(247,179,43,.1);border:1px solid rgba(247,179,43,.3);font-family:'JetBrains Mono',monospace;font-size:10px;color:#f7c45e;"><span class="msr" style="font-size:12px;">stairs</span>NO LIFT</span>
                 <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:7px;background:rgba(60,192,224,.1);border:1px solid rgba(60,192,224,.34);font-family:'JetBrains Mono',monospace;font-size:10px;color:#7fd6ea;"><span class="msr" style="font-size:12px;">menu_book</span>3 TIPS WAITING</span>

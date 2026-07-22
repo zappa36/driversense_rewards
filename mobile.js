@@ -304,27 +304,33 @@ function loadPlaces() {
   });
 }
 
-function renderLivePins() {
-  const wrap = document.getElementById('live-pins');
-  const img = document.getElementById('live-map');
-  if (!wrap || !img) return;
-  const liveOn = !!geo && img.style.display === 'block';
-  /* the illustration's fictional place pins make no sense on the real map */
-  document.querySelectorAll('.design-pin').forEach(el => { el.style.display = liveOn ? 'none' : ''; });
-  if (!liveOn) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+/* Projects lat/lng to CSS pixels inside the map screen: Web Mercator at the
+ * map's zoom, scaled the same way object-fit:cover scales the 390x640 image. */
+function mapProjector(img) {
   const W = img.parentElement.clientWidth || 390;
   const H = img.parentElement.clientHeight || 844;
-  const cover = Math.max(W / 390, H / 640); // how object-fit:cover scales the 390x640 map
-  const world = 256 * Math.pow(2, 17);      // Web Mercator at the map's zoom level
+  const cover = Math.max(W / 390, H / 640);
+  const world = 256 * Math.pow(2, 17);
   const px = (lat, lng) => {
     const s = Math.min(.9999, Math.max(-.9999, Math.sin(lat * Math.PI / 180)));
     return { x: world * (lng / 360 + .5), y: world * (.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) };
   };
   const c = px(geo.lat, geo.lng);
+  return { W, H, xy: (lat, lng) => { const q = px(lat, lng); return { x: W / 2 + (q.x - c.x) * cover, y: H / 2 + (q.y - c.y) * cover }; } };
+}
+
+function renderLivePins() {
+  const wrap = document.getElementById('live-pins');
+  const img = document.getElementById('live-map');
+  if (!wrap || !img) return;
+  const liveOn = !!geo && img.style.display === 'block';
+  /* the illustration's fictional pins make no sense on the real map */
+  document.querySelectorAll('.design-pin').forEach(el => { el.style.display = liveOn ? 'none' : ''; });
+  renderFlag(liveOn);
+  if (!liveOn) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  const { W, H, xy } = mapProjector(img);
   wrap.innerHTML = livePlaces.map(p => {
-    const q = px(p.lat, p.lng);
-    const x = W / 2 + (q.x - c.x) * cover;
-    const y = H / 2 + (q.y - c.y) * cover;
+    const { x, y } = xy(p.lat, p.lng);
     if (x < 26 || x > W - 26 || y < 150 || y > H - 250) return ''; // off-screen, or under the HUD/card
     const name = String(p.name || 'Saved place').replace(/</g, '&lt;').toUpperCase();
     return `
@@ -342,6 +348,66 @@ function renderLivePins() {
 }
 
 window.addEventListener('resize', renderLivePins);
+
+/* ---------- flagged destination · nearest LIVE studio challenge ---------- */
+let liveChallenges = [];   // LIVE challenges that carry real coordinates
+let seasonMode = 'euro';
+const flagDefaults = {};   // the design's fiction, restored with the illustrated fallback
+['flag-label', 'flag-kicker', 'flag-title', 'flag-chips'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) flagDefaults[id] = el.innerHTML;
+});
+
+const distMeters = (a, b) => {
+  const rad = x => x * Math.PI / 180;
+  const s = Math.sin(rad(b.lat - a.lat) / 2) ** 2
+    + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lng - a.lng) / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(s));
+};
+const fmtDist = m => m < 950 ? Math.round(m) + ' m'
+  : m < 100000 ? (m / 1000).toFixed(1) + ' km'
+    : Math.round(m / 1000).toLocaleString('en-US') + ' km';
+
+function renderFlag(liveOn) {
+  const pin = document.getElementById('map-flag');
+  const kicker = document.getElementById('flag-kicker');
+  if (!pin || !kicker) return;
+  const label = document.getElementById('flag-label');
+  const title = document.getElementById('flag-title');
+  const chips = document.getElementById('flag-chips');
+  if (!liveOn) { /* illustrated fallback: the design's fiction returns */
+    pin.style.display = '';
+    pin.style.left = '50%';
+    pin.style.top = '27%';
+    Object.keys(flagDefaults).forEach(id => { document.getElementById(id).innerHTML = flagDefaults[id]; });
+    chips.style.display = '';
+    return;
+  }
+  if (!liveChallenges.length) { /* nothing published with a real address */
+    pin.style.display = 'none';
+    kicker.textContent = 'NO FLAGGED PLACES NEARBY';
+    title.textContent = 'Tag a new place instead';
+    chips.style.display = 'none';
+    return;
+  }
+  const near = liveChallenges.reduce((a, b) => distMeters(geo, a) <= distMeters(geo, b) ? a : b);
+  const d = distMeters(geo, near);
+  const { W, H, xy } = mapProjector(document.getElementById('live-map'));
+  const { x, y } = xy(near.lat, near.lng);
+  const onScreen = x > 40 && x < W - 40 && y > 170 && y < H - 250;
+  pin.style.display = onScreen ? '' : 'none';
+  if (onScreen) { pin.style.left = Math.round(x) + 'px'; pin.style.top = Math.round(y) + 'px'; }
+  label.textContent = ((near.addr || near.title) + ' · FLAGGED').toUpperCase();
+  kicker.textContent = `FLAGGED · ${fmtDist(d)} ${d < 950 ? 'AHEAD' : 'AWAY'}`;
+  title.textContent = near.addr || near.title;
+  const fmtVal = v => seasonMode === 'points' ? Math.round(v * 100) + ' P' : '€ ' + v.toFixed(2);
+  const CHIP = "display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:10px;";
+  chips.style.display = '';
+  chips.innerHTML = `
+    <span style="${CHIP}background:rgba(95,224,180,.1);border:1px solid rgba(95,224,180,.3);color:#7ce0b8;"><span class="msr" style="font-size:12px;">payments</span>${fmtVal(near.value)}</span>
+    <span style="${CHIP}background:rgba(247,179,43,.1);border:1px solid rgba(247,179,43,.3);color:#f7c45e;"><span class="msr" style="font-size:12px;">star</span>+${near.xp} XP</span>
+    <span style="${CHIP}background:rgba(255,255,255,.05);border:1px solid rgba(140,165,200,.18);color:#cdd6e2;"><span class="msr" style="font-size:12px;">location_on</span>${String(near.zone || '').replace(/</g, '&lt;').toUpperCase()}</span>`;
+}
 
 async function reverseGeocode({ lat, lng }) {
   /* Google Geocoding when a key is configured (better street-level
@@ -492,8 +558,11 @@ function loadSeasonChallenges() {
   if (typeof DB === 'undefined' || !DB.enabled) return;
   Promise.all([DB.listChallenges(false), DB.fetchSettings()]).then(([rows, settingsRow]) => {
     const live = (rows || []).map(DB.rowToChal).filter(c => c.status === 'LIVE');
+    liveChallenges = live.filter(c => typeof c.lat === 'number' && typeof c.lng === 'number');
+    renderLivePins(); /* the flagged pin follows the nearest live challenge */
     if (!live.length) return; // keep the design's static list
     const L = settingsRow ? DB.rowToLogic(settingsRow) : { mode: 'euro' };
+    seasonMode = L.mode || 'euro';
     const fmt = v => L.mode === 'points' ? Math.round(v * 100) + ' P' : '€ ' + v.toFixed(2);
 
     document.getElementById('season-list-header').textContent = 'LIVE CHALLENGES · FROM THE HUB';
