@@ -131,8 +131,8 @@
           </div>
         </div>
 
-        <!-- knowledge place · already mapped -->
-        <div style="position:absolute;left:25%;top:47%;transform:translate(-50%,-50%);z-index:4;text-align:center;">
+        <!-- knowledge place · already mapped (illustration only — replaced by real saved places on the live map) -->
+        <div class="design-pin" style="position:absolute;left:25%;top:47%;transform:translate(-50%,-50%);z-index:4;text-align:center;">
           <div style="animation:bobble2 3s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;gap:5px;">
             <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(60,192,224,.55);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:#7fd6ea;white-space:nowrap;"><span class="msr fill" style="font-size:10px;">bookmark</span>SAVED PLACE</span>
             <div style="position:relative;width:46px;height:46px;border-radius:14px;background:linear-gradient(180deg,#3cc0e0,#02769c);border:2px solid rgba(255,255,255,.5);box-shadow:0 8px 18px rgba(4,152,186,.5),inset 0 1px 0 rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;overflow:hidden;">
@@ -144,8 +144,8 @@
           <div style="margin:4px auto 0;width:40px;height:13px;border-radius:50%;background:radial-gradient(circle,rgba(4,152,186,.5),transparent 70%);"></div>
         </div>
 
-        <!-- mystery place nearby -->
-        <div style="position:absolute;left:76%;top:36%;transform:translate(-50%,-50%);z-index:5;text-align:center;">
+        <!-- mystery place nearby (illustration only) -->
+        <div class="design-pin" style="position:absolute;left:76%;top:36%;transform:translate(-50%,-50%);z-index:5;text-align:center;">
           <div style="animation:bobble2 3.4s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;gap:5px;">
             <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(60,192,224,.55);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:#7fd6ea;white-space:nowrap;"><span class="msr fill" style="font-size:10px;">explore</span>UNMAPPED PLACE</span>
             <div style="position:relative;width:46px;height:46px;border-radius:14px;background:linear-gradient(180deg,#1c2940,#0c1626);border:2px dashed var(--gold,#FFCC00);box-shadow:0 8px 18px rgba(0,0,0,.5),0 0 16px rgba(245,197,66,.38);display:flex;align-items:center;justify-content:center;overflow:hidden;animation:glowpulse 2.4s ease-in-out infinite;">
@@ -172,6 +172,9 @@
             <div style="position:absolute;left:50%;top:50%;width:72px;height:72px;border-radius:50%;border:2px solid rgba(255,143,143,.6);transform:translate(-50%,-50%) rotateX(64deg);animation:ringpulse 2.6s ease-out infinite;"></div>
           </div>
         </div>
+
+        <!-- real tagged places, projected onto the live map -->
+        <div id="live-pins" style="position:absolute;inset:0;z-index:6;pointer-events:none;display:none;"></div>
 
         <!-- player -->
         <div id="map-player" style="position:absolute;left:50%;top:57%;transform:translate(-50%,-50%);z-index:7;">

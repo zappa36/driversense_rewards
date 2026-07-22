@@ -269,11 +269,11 @@ function updateLiveMaps() {
     if (!gkey || !geo) { img.style.display = 'none'; return; }
     img.onload = () => {
       img.style.display = 'block';
-      if (id === 'live-map') centerPlayer(true);
+      if (id === 'live-map') { centerPlayer(true); renderLivePins(); }
     };
     img.onerror = () => {
       img.style.display = 'none';
-      if (id === 'live-map') centerPlayer(false);
+      if (id === 'live-map') { centerPlayer(false); renderLivePins(); }
     };
     img.src = 'https://maps.googleapis.com/maps/api/staticmap'
       + `?center=${geo.lat},${geo.lng}&zoom=${zoom}&size=390x640&scale=2`
@@ -287,7 +287,61 @@ function hideLiveMaps() {
     if (img) { img.onerror = null; img.removeAttribute('src'); img.style.display = 'none'; }
   });
   centerPlayer(false);
+  renderLivePins();
 }
+
+/* ---------- real tagged places, pinned on the live map ---------- */
+let livePlaces = [];
+
+function loadPlaces() {
+  const local = () => { try { return JSON.parse(localStorage.getItem('ds_places') || '[]'); } catch { return []; } };
+  const remote = (typeof DB !== 'undefined' && DB.enabled)
+    ? DB.listPlaces(50).catch(() => []) : Promise.resolve([]);
+  remote.then(rows => {
+    livePlaces = (rows || []).concat(local()).filter(p =>
+      typeof p.lat === 'number' && typeof p.lng === 'number' && !String(p.name || '').startsWith('Demo spot'));
+    renderLivePins();
+  });
+}
+
+function renderLivePins() {
+  const wrap = document.getElementById('live-pins');
+  const img = document.getElementById('live-map');
+  if (!wrap || !img) return;
+  const liveOn = !!geo && img.style.display === 'block';
+  /* the illustration's fictional place pins make no sense on the real map */
+  document.querySelectorAll('.design-pin').forEach(el => { el.style.display = liveOn ? 'none' : ''; });
+  if (!liveOn) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  const W = img.parentElement.clientWidth || 390;
+  const H = img.parentElement.clientHeight || 844;
+  const cover = Math.max(W / 390, H / 640); // how object-fit:cover scales the 390x640 map
+  const world = 256 * Math.pow(2, 17);      // Web Mercator at the map's zoom level
+  const px = (lat, lng) => {
+    const s = Math.min(.9999, Math.max(-.9999, Math.sin(lat * Math.PI / 180)));
+    return { x: world * (lng / 360 + .5), y: world * (.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) };
+  };
+  const c = px(geo.lat, geo.lng);
+  wrap.innerHTML = livePlaces.map(p => {
+    const q = px(p.lat, p.lng);
+    const x = W / 2 + (q.x - c.x) * cover;
+    const y = H / 2 + (q.y - c.y) * cover;
+    if (x < 26 || x > W - 26 || y < 150 || y > H - 250) return ''; // off-screen, or under the HUD/card
+    const name = String(p.name || 'Saved place').replace(/</g, '&lt;').toUpperCase();
+    return `
+    <div style="position:absolute;left:${Math.round(x)}px;top:${Math.round(y)}px;transform:translate(-50%,-92%);text-align:center;">
+      <div style="animation:bobble2 3.2s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(60,192,224,.55);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:#7fd6ea;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;"><span class="msr fill" style="font-size:10px;">bookmark</span>${name}</span>
+        <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(180deg,#3cc0e0,#02769c);border:2px solid rgba(255,255,255,.5);box-shadow:0 7px 16px rgba(4,152,186,.5),inset 0 1px 0 rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;">
+          <span class="msr fill" style="font-size:20px;color:#fff;">bookmark</span>
+        </div>
+      </div>
+      <div style="margin:3px auto 0;width:34px;height:11px;border-radius:50%;background:radial-gradient(circle,rgba(4,152,186,.5),transparent 70%);"></div>
+    </div>`;
+  }).join('');
+  wrap.style.display = 'block';
+}
+
+window.addEventListener('resize', renderLivePins);
 
 async function reverseGeocode({ lat, lng }) {
   /* Google Geocoding when a key is configured (better street-level
@@ -364,6 +418,7 @@ async function saveTaggedPlace() {
     label.textContent = shared ? 'Saved ✓' : 'Saved on this phone ✓';
     tagBonus = 50; /* first to map */
     renderPoints();
+    if (geo) { livePlaces.push(row); renderLivePins(); } /* pin it right away */
     setTimeout(() => { show('map'); label.textContent = 'Save place'; }, 700);
   };
   if (typeof DB !== 'undefined' && DB.enabled) {
@@ -490,4 +545,5 @@ renderOtto();
 renderPoints();
 renderLeaderboard();
 loadSeasonChallenges();
+loadPlaces();
 startGeolocation(); // the map is the home screen — center it on the real position
