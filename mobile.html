@@ -219,7 +219,7 @@
 
         <!-- bottom flag card -->
         <div style="position:absolute;left:0;right:0;bottom:0;z-index:9;border-radius:26px 26px 46px 46px;background:linear-gradient(180deg,rgba(15,26,40,.94),rgba(9,16,26,.97));backdrop-filter:blur(10px);border-top:1px solid rgba(255,107,107,.3);box-shadow:0 -22px 54px -18px rgba(0,0,0,.85);padding:15px 18px 28px;">
-          <div data-nav="arrival" style="cursor:pointer;display:flex;align-items:center;gap:13px;">
+          <div id="flag-row" data-nav="arrival" style="cursor:pointer;display:flex;align-items:center;gap:13px;">
             <div style="position:relative;width:56px;height:56px;flex:none;border-radius:15px;background:linear-gradient(180deg,rgba(255,143,143,.22),rgba(214,58,58,.1));border:1px solid rgba(255,107,107,.4);display:flex;align-items:center;justify-content:center;">
               <span class="msr fill" style="font-size:30px;color:#ff8f8f;">apartment</span>
             </div>
@@ -235,6 +235,8 @@
               </div>
             </div>
           </div>
+          <!-- tag inspector · opens when a pin you created is tapped on the live map -->
+          <div id="tag-card" style="display:none;"></div>
           <div data-nav="otto" style="cursor:pointer;margin-top:15px;display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:15px;background:linear-gradient(180deg,rgba(124,140,255,.13),rgba(68,88,216,.06));border:1px solid rgba(124,140,255,.34);">
             <div style="position:relative;width:42px;height:42px;flex:none;display:flex;align-items:center;justify-content:center;">
               <span style="position:absolute;left:50%;top:50%;width:40px;height:40px;border-radius:50%;border:1.5px solid rgba(124,140,255,.55);transform:translate(-50%,-50%);animation:orbring 1.9s ease-out infinite;"></span>

@@ -26,3 +26,13 @@ create policy "anyone reads tips" on public.tips
 drop policy if exists "anyone adds tips" on public.tips;
 create policy "anyone adds tips" on public.tips
   for insert to anon, authenticated with check (true);
+
+-- Tags stay editable from the app: retelling Otto or typing updates a tip,
+-- and the tag inspector can delete it.
+drop policy if exists "anyone updates tips" on public.tips;
+create policy "anyone updates tips" on public.tips
+  for update to anon, authenticated using (true) with check (true);
+
+drop policy if exists "anyone deletes tips" on public.tips;
+create policy "anyone deletes tips" on public.tips
+  for delete to anon, authenticated using (true);

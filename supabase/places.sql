@@ -25,3 +25,13 @@ create policy "anyone reads places" on public.places
 drop policy if exists "anyone adds places" on public.places;
 create policy "anyone adds places" on public.places
   for insert to anon, authenticated with check (true);
+
+-- Tags stay editable from the app: the tag inspector can rename and
+-- delete saved places.
+drop policy if exists "anyone updates places" on public.places;
+create policy "anyone updates places" on public.places
+  for update to anon, authenticated using (true) with check (true);
+
+drop policy if exists "anyone deletes places" on public.places;
+create policy "anyone deletes places" on public.places
+  for delete to anon, authenticated using (true);

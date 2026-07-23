@@ -105,10 +105,14 @@ const DB = (() => {
     saveSettings: row => rest('/rest/v1/settings?id=eq.1', { method: 'PATCH', body: JSON.stringify(row) }, true),
     /* Places tagged from the mobile app (anon insert by design — the pilot
      * people app has no accounts; see supabase/places.sql). */
-    insertPlace: row => rest('/rest/v1/places', { method: 'POST', body: JSON.stringify([row]) }),
+    insertPlace: row => rest('/rest/v1/places', { method: 'POST', body: JSON.stringify([row]), headers: { Prefer: 'return=representation' } }),
     listPlaces: limit => rest('/rest/v1/places?select=*&order=created_at.desc&limit=' + (limit || 20)),
-    insertTip: row => rest('/rest/v1/tips', { method: 'POST', body: JSON.stringify([row]) }),
+    updatePlace: (id, patch) => rest('/rest/v1/places?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify(patch) }),
+    deletePlace: id => rest('/rest/v1/places?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }),
+    insertTip: row => rest('/rest/v1/tips', { method: 'POST', body: JSON.stringify([row]), headers: { Prefer: 'return=representation' } }),
     listTips: limit => rest('/rest/v1/tips?select=*&order=created_at.desc&limit=' + (limit || 30)),
+    updateTip: (id, patch) => rest('/rest/v1/tips?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify(patch) }),
+    deleteTip: id => rest('/rest/v1/tips?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }),
     /* Voice debrief: post the recorded clip to the otto Edge Function, which
      * holds the OpenAI key server-side and returns transcript + reply + tip. */
     ottoVoice: async (blob, place) => {

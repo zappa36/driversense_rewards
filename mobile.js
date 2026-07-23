@@ -169,12 +169,14 @@ function setBeat(n) {
  * the otto Edge Function (which alone holds the OpenAI key) transcribes
  * the clip and structures it into a tip saved to the tips table. Without
  * Supabase, or if the mic is denied, the scripted demo conversation runs. */
-const voice = { mode: 'script', rec: null, busy: false, exchanges: 0 };
+const voice = { mode: 'script', rec: null, busy: false, exchanges: 0, editing: null };
 
 const canLiveVoice = () => typeof DB !== 'undefined' && DB.enabled && window.isSecureContext
   && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && typeof MediaRecorder !== 'undefined';
 
 const placeLabel = () => {
+  /* honest position label: reverse-geocoded street, else raw coordinates */
+  if (geo) return geoAddr || `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`;
   const t = document.getElementById('flag-title');
   return (t && t.textContent) || 'this place';
 };
@@ -223,12 +225,28 @@ async function sendVoiceClip(blob) {
     const d = await DB.ottoVoice(blob, place);
     renderOttoLive({ from: 'driver', text: d.transcript }, 'think');
     if (geoState === 'locating') await waitForFix(); /* pin the tip where it was spoken */
-    const row = {
-      place, transcript: d.transcript,
+    const patch = {
+      transcript: d.transcript,
       title: (d.tip && d.tip.title) || null, category: (d.tip && d.tip.category) || null,
-      lat: geo ? geo.lat : null, lng: geo ? geo.lng : null,
     };
-    DB.insertTip(row).catch(() => { /* tips table missing — the conversation still works */ });
+    if (voice.editing) { /* retelling an existing tag replaces its content */
+      Object.assign(voice.editing, patch);
+      if (voice.editing.id) DB.updateTip(voice.editing.id, patch).catch(() => { /* run tips.sql again for edit rights */ });
+      renderLivePins();
+      document.getElementById('done-chip').innerHTML =
+        `<span class="msr fill" style="font-size:14px;color:var(--gold,#FFCC00);">check_circle</span>TIP UPDATED · ${escT(patch.category || 'INFO')}`;
+      voice.exchanges++;
+      setTimeout(() => {
+        if (current !== 'otto' || voice.rec) return;
+        renderOttoLive({ from: 'ai', text: d.reply || 'Updated — the next visitor sees the new note.' }, 'idle');
+      }, 1700);
+      voice.busy = false;
+      return;
+    }
+    const row = { place, ...patch, lat: geo ? geo.lat : null, lng: geo ? geo.lng : null };
+    DB.insertTip(row).then(saved => {
+      if (Array.isArray(saved) && saved[0] && saved[0].id) row.id = saved[0].id;
+    }).catch(() => { /* tips table missing — the conversation still works */ });
     if (geo) { liveTips.unshift(row); renderLivePins(); } /* tag the map right away */
     voice.exchanges++;
     if (voice.exchanges === 1) { ottoBonus = 50; renderPoints(); }
@@ -250,7 +268,10 @@ function ottoStart() {
   voice.mode = canLiveVoice() ? 'live' : 'script';
   voice.exchanges = 0;
   if (voice.mode === 'live') {
-    renderOttoLive({ from: 'ai', text: `Hey M. Kaur — you're at ${placeLabel()}. What did you find? Tap the mic and just talk.` }, 'idle');
+    const t = voice.editing;
+    renderOttoLive({ from: 'ai', text: t
+      ? `Let's update your tag "${t.title || t.transcript || 'voice tip'}" — tap the mic and tell me the new situation.`
+      : `Hey M. Kaur — you're at ${placeLabel()}. What did you find? Tap the mic and just talk.` }, 'idle');
   } else {
     beat = 0; renderOtto(); scheduleOtto();
   }
@@ -264,6 +285,7 @@ function ottoStop() {
     voice.rec = null;
   }
   voice.busy = false;
+  voice.editing = null;
 }
 
 /* ---------- phone GPS · tag-a-place ---------- */
@@ -445,31 +467,31 @@ function renderLivePins() {
     const q = xy(lat, lng);
     return (q.x < 26 || q.x > W - 26 || q.y < 150 || q.y > H - 250) ? null : q; // off-screen, or under the HUD/card
   };
-  const pinShell = (x, y, glow, inner) => `
-    <div style="position:absolute;left:${Math.round(x)}px;top:${Math.round(y)}px;transform:translate(-50%,-92%);text-align:center;">
+  const pinShell = (x, y, glow, kind, i, inner) => `
+    <div data-action="open-tag" data-kind="${kind}" data-i="${i}" style="position:absolute;left:${Math.round(x)}px;top:${Math.round(y)}px;transform:translate(-50%,-92%);text-align:center;pointer-events:auto;cursor:pointer;">
       <div style="animation:bobble2 3.2s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;gap:4px;">${inner}</div>
       <div style="margin:3px auto 0;width:34px;height:11px;border-radius:50%;background:radial-gradient(circle,${glow},transparent 70%);"></div>
     </div>`;
 
   const cells = [];
-  livePlaces.forEach(p => {
+  livePlaces.forEach((p, i) => {
     const q = onMap(p.lat, p.lng);
     if (!q) return;
     const { x, y } = fit(q.x, q.y);
     const name = escT(p.name || 'Saved place').toUpperCase();
-    cells.push(pinShell(x, y, 'rgba(4,152,186,.5)', `
+    cells.push(pinShell(x, y, 'rgba(4,152,186,.5)', 'place', i, `
         <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(60,192,224,.55);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:#7fd6ea;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;"><span class="msr fill" style="font-size:10px;">bookmark</span>${name}</span>
         <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(180deg,#3cc0e0,#02769c);border:2px solid rgba(255,255,255,.5);box-shadow:0 7px 16px rgba(4,152,186,.5),inset 0 1px 0 rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;">
           <span class="msr fill" style="font-size:20px;color:#fff;">bookmark</span>
         </div>`));
   });
   const TIP_ICONS = { ACCESS: 'elevator', CLOSURE: 'block', HAZARD: 'warning', ENTRANCE: 'door_front', HOURS: 'schedule', INFO: 'info' };
-  liveTips.forEach(t => {
+  liveTips.forEach((t, i) => {
     const q = onMap(t.lat, t.lng);
     if (!q) return;
     const { x, y } = fit(q.x, q.y);
     const label = escT(t.title || t.transcript || 'Voice tip').toUpperCase();
-    cells.push(pinShell(x, y, 'rgba(245,197,66,.45)', `
+    cells.push(pinShell(x, y, 'rgba(245,197,66,.45)', 'tip', i, `
         <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(245,197,66,.5);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:#ffe39a;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis;"><span class="msr fill" style="font-size:10px;">graphic_eq</span>${label}</span>
         <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(180deg,#ffd95e,#f3ac10);border:2px solid rgba(255,255,255,.55);box-shadow:0 7px 16px rgba(243,172,16,.5),inset 0 1px 0 rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;">
           <span class="msr fill" style="font-size:20px;color:#5a3d06;">${TIP_ICONS[t.category] || 'info'}</span>
@@ -502,43 +524,78 @@ const fmtDist = m => m < 950 ? Math.round(m) + ' m'
 
 function renderFlag(liveOn) {
   const pin = document.getElementById('map-flag');
-  const kicker = document.getElementById('flag-kicker');
-  if (!pin || !kicker) return;
-  const label = document.getElementById('flag-label');
-  const title = document.getElementById('flag-title');
-  const chips = document.getElementById('flag-chips');
+  const row = document.getElementById('flag-row');
+  if (!pin || !row) return;
   if (!liveOn) { /* illustrated fallback: the design's fiction returns */
+    row.style.display = '';
     pin.style.display = '';
     pin.style.left = '50%';
     pin.style.top = '27%';
     Object.keys(flagDefaults).forEach(id => { document.getElementById(id).innerHTML = flagDefaults[id]; });
-    chips.style.display = '';
+    const chips = document.getElementById('flag-chips');
+    if (chips) chips.style.display = '';
+    tagSel = null;
+    renderTagCard(); /* no real pins on the illustration */
     return;
   }
-  if (!liveChallenges.length) { /* nothing published with a real address */
-    pin.style.display = 'none';
-    kicker.textContent = 'NO FLAGGED PLACES NEARBY';
-    title.textContent = 'Tag a new place instead';
-    chips.style.display = 'none';
-    return;
-  }
+  /* live map: the bottom banner only appears when a tag is tapped */
+  row.style.display = 'none';
+  if (!liveChallenges.length) { pin.style.display = 'none'; return; }
   const near = liveChallenges.reduce((a, b) => distMeters(geo, a) <= distMeters(geo, b) ? a : b);
-  const d = distMeters(geo, near);
   const { W, H, xy } = mapProjector(document.getElementById('live-map'));
   const { x, y } = xy(near.lat, near.lng);
   const onScreen = x > 40 && x < W - 40 && y > 170 && y < H - 250;
   pin.style.display = onScreen ? '' : 'none';
   if (onScreen) { pin.style.left = Math.round(x) + 'px'; pin.style.top = Math.round(y) + 'px'; }
-  label.textContent = ((near.addr || near.title) + ' · FLAGGED').toUpperCase();
-  kicker.textContent = `FLAGGED · ${fmtDist(d)} ${d < 950 ? 'AHEAD' : 'AWAY'}`;
-  title.textContent = near.addr || near.title;
-  const fmtVal = v => seasonMode === 'points' ? Math.round(v * 100) + ' P' : '€ ' + v.toFixed(2);
-  const CHIP = "display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:10px;";
-  chips.style.display = '';
-  chips.innerHTML = `
-    <span style="${CHIP}background:rgba(95,224,180,.1);border:1px solid rgba(95,224,180,.3);color:#7ce0b8;"><span class="msr" style="font-size:12px;">payments</span>${fmtVal(near.value)}</span>
-    <span style="${CHIP}background:rgba(247,179,43,.1);border:1px solid rgba(247,179,43,.3);color:#f7c45e;"><span class="msr" style="font-size:12px;">star</span>+${near.xp} XP</span>
-    <span style="${CHIP}background:rgba(255,255,255,.05);border:1px solid rgba(140,165,200,.18);color:#cdd6e2;"><span class="msr" style="font-size:12px;">location_on</span>${String(near.zone || '').replace(/</g, '&lt;').toUpperCase()}</span>`;
+  document.getElementById('flag-label').textContent = ((near.addr || near.title) + ' · FLAGGED').toUpperCase();
+}
+
+/* ---------- tag inspector · tap your own pin to view / edit / delete ---------- */
+let tagSel = null;       // { kind: 'tip'|'place', i: index }
+let tagEdit = false;     // typing edit open
+let tagDelArmed = false; // two-tap delete
+
+const tagSelObj = () => !tagSel ? null : (tagSel.kind === 'tip' ? liveTips[tagSel.i] : livePlaces[tagSel.i]);
+
+function renderTagCard() {
+  const card = document.getElementById('tag-card');
+  if (!card) return;
+  const obj = tagSelObj();
+  if (!obj) {
+    tagSel = null; tagEdit = false; tagDelArmed = false;
+    card.style.display = 'none'; card.innerHTML = '';
+    return;
+  }
+  const isTip = tagSel.kind === 'tip';
+  const accent = isTip ? '245,197,66' : '60,192,224';
+  const text = isTip ? '#ffe39a' : '#7fd6ea';
+  const titleText = isTip ? (obj.title || obj.transcript || 'Voice tip') : (obj.name || 'Saved place');
+  const BTN = "cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:7px 11px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;";
+  card.innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:12px;">
+      <div style="flex:none;width:44px;height:44px;border-radius:13px;background:linear-gradient(180deg,rgba(${accent},.25),rgba(${accent},.08));border:1px solid rgba(${accent},.45);display:flex;align-items:center;justify-content:center;">
+        <span class="msr fill" style="font-size:23px;color:${text};">${isTip ? 'graphic_eq' : 'bookmark'}</span>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;color:${text};">${isTip ? 'YOUR VOICE TAG · ' + escT(obj.category || 'INFO') : 'YOUR SAVED PLACE'}${geo && typeof obj.lat === 'number' ? ' · ' + fmtDist(distMeters(geo, obj)).toUpperCase() + ' FROM YOU' : ''}</span>
+          <span data-action="tag-close" style="margin-left:auto;cursor:pointer;width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.06);display:inline-flex;align-items:center;justify-content:center;"><span class="msr" style="font-size:14px;color:#8b97a8;">close</span></span>
+        </div>
+        ${tagEdit
+    ? `<div style="display:flex;gap:7px;margin-top:6px;">
+            <input id="tag-edit-input" value="${escT(titleText).replace(/"/g, '&quot;')}" maxlength="80" style="flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid rgba(${accent},.45);border-radius:9px;padding:8px 10px;color:#eef2f7;font-family:'Saira',sans-serif;font-size:14px;outline:none;">
+            <span data-action="tag-type-save" style="${BTN}background:linear-gradient(180deg,#ffd95e,#f3ac10);color:#5a3d06;border:1px solid rgba(255,255,255,.4);font-weight:700;">SAVE</span>
+          </div>`
+    : `<div style="font-family:'Saira Semi Condensed',sans-serif;font-weight:600;font-size:18px;line-height:1.05;color:#eef2f7;margin-top:3px;">${escT(titleText)}</div>`}
+        ${isTip && obj.transcript && !tagEdit ? `<div style="font-family:'Saira',sans-serif;font-size:12px;color:#94a1b2;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">&ldquo;${escT(obj.transcript)}&rdquo;</div>` : ''}
+        <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;">
+          ${isTip ? `<span data-action="tag-talk" style="${BTN}background:rgba(124,140,255,.14);border:1px solid rgba(124,140,255,.4);color:#aab6ff;"><span class="msr fill" style="font-size:13px;">mic</span>RETELL OTTO</span>` : ''}
+          <span data-action="tag-type" style="${BTN}background:rgba(${accent},.12);border:1px solid rgba(${accent},.4);color:${text};"><span class="msr" style="font-size:13px;">edit</span>TYPE</span>
+          <span data-action="tag-del" style="${BTN}background:rgba(255,107,107,${tagDelArmed ? '.3' : '.1'});border:1px solid rgba(255,107,107,.45);color:#ff9b9b;"><span class="msr" style="font-size:13px;">delete</span>${tagDelArmed ? 'SURE?' : 'DELETE'}</span>
+        </div>
+      </div>
+    </div>`;
+  card.style.display = 'block';
 }
 
 async function reverseGeocode({ lat, lng }) {
@@ -587,6 +644,12 @@ function localSavePlace(row) {
   } catch { /* private mode */ }
 }
 
+function localPatchPlaces(fn) {
+  try {
+    localStorage.setItem('ds_places', JSON.stringify(fn(JSON.parse(localStorage.getItem('ds_places') || '[]'))));
+  } catch { /* private mode */ }
+}
+
 async function saveTaggedPlace() {
   const label = document.getElementById('tag-save-label');
 
@@ -620,7 +683,10 @@ async function saveTaggedPlace() {
     setTimeout(() => { show('map'); label.textContent = 'Save place'; }, 700);
   };
   if (typeof DB !== 'undefined' && DB.enabled) {
-    DB.insertPlace(row).then(() => finish(true)).catch(() => { localSavePlace(row); finish(false); });
+    DB.insertPlace(row).then(saved => {
+      if (Array.isArray(saved) && saved[0] && saved[0].id) row.id = saved[0].id; /* editable later */
+      finish(true);
+    }).catch(() => { localSavePlace(row); finish(false); });
   } else {
     localSavePlace(row);
     finish(false);
@@ -741,6 +807,75 @@ document.getElementById('phone-screen').addEventListener('click', e => {
     case 'tag-save':
       saveTaggedPlace();
       break;
+    case 'open-tag':
+      tagSel = { kind: act.dataset.kind, i: +act.dataset.i };
+      tagEdit = false; tagDelArmed = false;
+      renderTagCard();
+      break;
+    case 'tag-close':
+      tagSel = null;
+      renderTagCard();
+      break;
+    case 'tag-type': {
+      tagEdit = true;
+      renderTagCard();
+      const inp = document.getElementById('tag-edit-input');
+      if (inp) { inp.focus(); inp.select(); }
+      break;
+    }
+    case 'tag-type-save': {
+      const obj = tagSelObj();
+      const inp = document.getElementById('tag-edit-input');
+      const v = inp ? inp.value.trim() : '';
+      const dbOn = typeof DB !== 'undefined' && DB.enabled;
+      if (obj && v) {
+        if (tagSel.kind === 'tip') {
+          if (obj.id && dbOn) DB.updateTip(obj.id, { title: v }).catch(() => { /* run tips.sql again for edit rights */ });
+          obj.title = v;
+        } else {
+          if (obj.id && dbOn) DB.updatePlace(obj.id, { name: v }).catch(() => { /* run places.sql again for edit rights */ });
+          else localPatchPlaces(list => list.map(r => r.lat === obj.lat && r.lng === obj.lng && r.name === obj.name ? { ...r, name: v } : r));
+          obj.name = v;
+        }
+      }
+      tagEdit = false;
+      renderTagCard();
+      renderLivePins();
+      break;
+    }
+    case 'tag-talk': {
+      const obj = tagSelObj();
+      if (obj && tagSel.kind === 'tip') {
+        voice.editing = obj;
+        tagSel = null;
+        renderTagCard();
+        show('otto');
+      }
+      break;
+    }
+    case 'tag-del': {
+      const obj = tagSelObj();
+      if (!obj) break;
+      if (!tagDelArmed) { /* two-tap confirm, like the studio */
+        tagDelArmed = true;
+        renderTagCard();
+        setTimeout(() => { if (tagDelArmed) { tagDelArmed = false; renderTagCard(); } }, 3000);
+        break;
+      }
+      const dbOn = typeof DB !== 'undefined' && DB.enabled;
+      if (tagSel.kind === 'tip') {
+        if (obj.id && dbOn) DB.deleteTip(obj.id).catch(() => { /* run tips.sql again for delete rights */ });
+        liveTips.splice(tagSel.i, 1);
+      } else {
+        if (obj.id && dbOn) DB.deletePlace(obj.id).catch(() => { /* run places.sql again for delete rights */ });
+        else localPatchPlaces(list => list.filter(r => !(r.lat === obj.lat && r.lng === obj.lng && r.name === obj.name)));
+        livePlaces.splice(tagSel.i, 1);
+      }
+      tagSel = null; tagDelArmed = false;
+      renderTagCard();
+      renderLivePins();
+      break;
+    }
   }
 });
 
