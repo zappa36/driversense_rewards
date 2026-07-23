@@ -574,7 +574,7 @@ function renderFlag(liveOn) {
   const row = document.getElementById('flag-row');
   if (!pin || !row) return;
   if (!liveOn) { /* illustrated fallback: the design's fiction returns */
-    row.style.display = '';
+    row.style.display = 'flex'; /* its inline style is flex — '' would wipe it */
     pin.style.display = '';
     pin.style.left = '50%';
     pin.style.top = '27%';
