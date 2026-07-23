@@ -113,6 +113,8 @@ const DB = (() => {
     listTips: limit => rest('/rest/v1/tips?select=*&order=created_at.desc&limit=' + (limit || 30)),
     updateTip: (id, patch) => rest('/rest/v1/tips?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify(patch) }),
     deleteTip: id => rest('/rest/v1/tips?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }),
+    insertReport: row => rest('/rest/v1/reports', { method: 'POST', body: JSON.stringify([row]) }),
+    listReports: limit => rest('/rest/v1/reports?select=challenge_id,device,created_at&order=created_at.desc&limit=' + (limit || 500)),
     /* Voice debrief: post the recorded clip to the otto Edge Function, which
      * holds the OpenAI key server-side and returns transcript + reply + tip. */
     ottoVoice: async (blob, place) => {

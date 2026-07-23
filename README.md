@@ -133,6 +133,20 @@ With `config.js` left empty, everything runs in **local demo mode**: hardcoded
 data, and the studio unlocks with the planner code **`1184`** (defined in
 `auth.js`). Demo mode's gate is browser-only and not real security.
 
+## Investigation challenges (consensus payouts)
+
+Challenges published in Challenge Studio with an address appear on the
+mobile app's live map as red **INVESTIGATE** pins. They're deliberately
+vague — "deliveries here run slower than planned, find out why". Someone
+physically within **75 m** of the pin can tap it and **report to Otto** by
+voice; the report (transcript + structured summary + GPS) is stored in the
+`reports` table (run [`supabase/reports.sql`](supabase/reports.sql) once).
+The payout releases only when reports from **2 different devices** agree —
+one person alone can't claim the money. When the second report lands, the
+pin flips to a green SOLVED state and Otto announces the released amount.
+(Later, challenges like these can be generated automatically from
+longer-than-planned delivery times.)
+
 ## Otto voice debrief (OpenAI)
 
 With Supabase configured, Otto collects **real voice observations**

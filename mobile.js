@@ -169,7 +169,7 @@ function setBeat(n) {
  * the otto Edge Function (which alone holds the OpenAI key) transcribes
  * the clip and structures it into a tip saved to the tips table. Without
  * Supabase, or if the mic is denied, the scripted demo conversation runs. */
-const voice = { mode: 'script', rec: null, busy: false, exchanges: 0, editing: null };
+const voice = { mode: 'script', rec: null, busy: false, exchanges: 0, editing: null, challenge: null };
 
 const canLiveVoice = () => typeof DB !== 'undefined' && DB.enabled && window.isSecureContext
   && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && typeof MediaRecorder !== 'undefined';
@@ -229,6 +229,36 @@ async function sendVoiceClip(blob) {
       transcript: d.transcript,
       title: (d.tip && d.tip.title) || null, category: (d.tip && d.tip.category) || null,
     };
+    if (voice.challenge) { /* filing evidence for an investigation challenge */
+      const c = voice.challenge;
+      const already = iReported(c.id);
+      const rrow = {
+        challenge_id: c.id, device: deviceId, ...patch,
+        lat: geo ? geo.lat : null, lng: geo ? geo.lng : null, accuracy: geo ? geo.acc : null,
+      };
+      DB.insertReport(rrow).catch(() => { /* run reports.sql once to create the table */ });
+      (challengeReports[c.id] = challengeReports[c.id] || []).push(rrow);
+      renderLivePins();
+      const n = distinctReporters(c.id);
+      const solved = isSolved(c.id);
+      voice.exchanges++;
+      if (!already) { ottoBonus = 50; renderPoints(); }
+      document.getElementById('done-chip').innerHTML = solved
+        ? `<span class="msr fill" style="font-size:14px;color:#5fe0b0;">task_alt</span>SOLVED · ${escT(fmtReward(c.value))} RELEASED`
+        : `<span class="msr fill" style="font-size:14px;color:var(--gold,#FFCC00);">add_circle</span>REPORT ${n}/${REPORTS_NEEDED} FILED`;
+      setTimeout(() => {
+        if (current !== 'otto' || voice.rec) return;
+        renderOttoLive({ from: 'ai', text: solved
+          ? `That settles it — ${n} people confirmed it independently. ${fmtReward(c.value)} is released to everyone who reported. Nice work.`
+          : `${d.reply || 'Filed.'} You're report ${n} of ${REPORTS_NEEDED} — the payout unlocks when another person confirms on site.` }, 'idle');
+        if (solved) {
+          clearTimeout(levelTimer);
+          levelTimer = setTimeout(() => { if (current === 'otto' && !voice.rec && !voice.busy) show('levelup'); }, 3200);
+        }
+      }, 1700);
+      voice.busy = false;
+      return;
+    }
     if (voice.editing) { /* retelling an existing tag replaces its content */
       Object.assign(voice.editing, patch);
       if (voice.editing.id) DB.updateTip(voice.editing.id, patch).catch(() => { /* run tips.sql again for edit rights */ });
@@ -268,10 +298,13 @@ function ottoStart() {
   voice.mode = canLiveVoice() ? 'live' : 'script';
   voice.exchanges = 0;
   if (voice.mode === 'live') {
+    const c = voice.challenge;
     const t = voice.editing;
-    renderOttoLive({ from: 'ai', text: t
-      ? `Let's update your tag "${t.title || t.transcript || 'voice tip'}" — tap the mic and tell me the new situation.`
-      : `Hey M. Kaur — you're at ${placeLabel()}. What did you find? Tap the mic and just talk.` }, 'idle');
+    renderOttoLive({ from: 'ai', text: c
+      ? `You're at ${c.addr || c.title}. Deliveries here run slower than planned — what's going on? Tap the mic and describe what you see.`
+      : t
+        ? `Let's update your tag "${t.title || t.transcript || 'voice tip'}" — tap the mic and tell me the new situation.`
+        : `Hey M. Kaur — you're at ${placeLabel()}. What did you find? Tap the mic and just talk.` }, 'idle');
   } else {
     beat = 0; renderOtto(); scheduleOtto();
   }
@@ -286,6 +319,7 @@ function ottoStop() {
   }
   voice.busy = false;
   voice.editing = null;
+  voice.challenge = null;
 }
 
 /* ---------- phone GPS · tag-a-place ---------- */
@@ -462,16 +496,41 @@ function hideLiveMaps() {
 let livePlaces = [];
 let liveTips = [];
 
+/* ---------- investigation challenges · consensus before payout ---------- */
+/* A challenge from the studio is deliberately vague ("deliveries here run
+ * slower than planned — find out why"). People physically at the spot file
+ * a voice report through Otto; the payout releases only when reports from
+ * REPORTS_NEEDED different devices agree, so one person can't cheat. */
+const REPORTS_NEEDED = 2;
+const REPORT_RADIUS = 75; // metres — how close you must be to file a report
+
+const deviceId = (() => {
+  try {
+    let d = localStorage.getItem('ds_device');
+    if (!d) { d = 'dev-' + Math.random().toString(36).slice(2, 10); localStorage.setItem('ds_device', d); }
+    return d;
+  } catch { return 'dev-anon'; }
+})();
+
+let challengeReports = {}; // challenge_id -> [{ device, ... }]
+const reportsFor = id => challengeReports[id] || [];
+const distinctReporters = id => new Set(reportsFor(id).map(r => r.device)).size;
+const iReported = id => reportsFor(id).some(r => r.device === deviceId);
+const isSolved = id => distinctReporters(id) >= REPORTS_NEEDED;
+
 function loadPlaces() {
   const local = () => { try { return JSON.parse(localStorage.getItem('ds_places') || '[]'); } catch { return []; } };
   const on = typeof DB !== 'undefined' && DB.enabled;
   Promise.all([
     on ? DB.listPlaces(50).catch(() => []) : Promise.resolve([]),
     on ? DB.listTips(50).catch(() => []) : Promise.resolve([]),
-  ]).then(([rows, tips]) => {
+    on ? DB.listReports(500).catch(() => []) : Promise.resolve([]),
+  ]).then(([rows, tips, reports]) => {
     livePlaces = (rows || []).concat(local()).filter(p =>
       typeof p.lat === 'number' && typeof p.lng === 'number' && !String(p.name || '').startsWith('Demo spot'));
     liveTips = (tips || []).filter(t => typeof t.lat === 'number' && typeof t.lng === 'number');
+    challengeReports = {};
+    (reports || []).forEach(r => { (challengeReports[r.challenge_id] = challengeReports[r.challenge_id] || []).push(r); });
     renderLivePins();
   });
 }
@@ -521,6 +580,21 @@ function renderLivePins() {
     </div>`;
 
   const cells = [];
+  liveChallenges.forEach((c, i) => {
+    const q = onMap(c.lat, c.lng);
+    if (!q) return;
+    const { x, y } = fit(q.x, q.y);
+    const solved = isSolved(c.id);
+    const mine = iReported(c.id);
+    const label = solved ? 'SOLVED ✓' : mine ? `${distinctReporters(c.id)}/${REPORTS_NEEDED} · NEEDS MORE` : 'INVESTIGATE';
+    const rgb = solved ? '70,211,154' : '255,107,107';
+    const tx = solved ? '#7ce0b8' : '#ff9b9b';
+    cells.push(pinShell(x, y, `rgba(${rgb},.45)`, 'chal', i, `
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(${rgb},.55);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:${tx};white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis;"><span class="msr fill" style="font-size:10px;">${solved ? 'task_alt' : 'travel_explore'}</span>${label}</span>
+        <div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(180deg,rgba(${solved ? '112,224,176' : '255,143,143'},.95),rgba(${solved ? '24,158,106' : '214,58,58'},.95));border:2px solid rgba(255,255,255,.55);box-shadow:0 8px 18px rgba(${rgb},.5),inset 0 1px 0 rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;${solved ? '' : 'animation:glowpulse 2.4s ease-in-out infinite;'}">
+          <span class="msr fill" style="font-size:24px;color:#fff;">${solved ? 'task_alt' : 'apartment'}</span>
+        </div>`));
+  });
   livePlaces.forEach((p, i) => {
     const q = onMap(p.lat, p.lng);
     if (!q) return;
@@ -553,6 +627,7 @@ window.addEventListener('resize', renderLivePins);
 /* ---------- flagged destination · nearest LIVE studio challenge ---------- */
 let liveChallenges = [];   // LIVE challenges that carry real coordinates
 let seasonMode = 'euro';
+const fmtReward = v => seasonMode === 'points' ? Math.round(v * 100) + ' P' : '€ ' + Number(v).toFixed(2);
 const flagDefaults = {};   // the design's fiction, restored with the illustrated fallback
 ['flag-label', 'flag-kicker', 'flag-title', 'flag-chips'].forEach(id => {
   const el = document.getElementById(id);
@@ -585,16 +660,10 @@ function renderFlag(liveOn) {
     renderTagCard(); /* no real pins on the illustration */
     return;
   }
-  /* live map: the bottom banner only appears when a tag is tapped */
+  /* live map: challenges render as their own investigate pins, and the
+   * bottom banner only appears when a tag is tapped */
   row.style.display = 'none';
-  if (!liveChallenges.length) { pin.style.display = 'none'; return; }
-  const near = liveChallenges.reduce((a, b) => distMeters(geo, a) <= distMeters(geo, b) ? a : b);
-  const { W, H, xy } = mapProjector(document.getElementById('live-map'));
-  const { x, y } = xy(near.lat, near.lng);
-  const onScreen = x > 40 && x < W - 40 && y > 170 && y < H - 250;
-  pin.style.display = onScreen ? '' : 'none';
-  if (onScreen) { pin.style.left = Math.round(x) + 'px'; pin.style.top = Math.round(y) + 'px'; }
-  document.getElementById('flag-label').textContent = ((near.addr || near.title) + ' · FLAGGED').toUpperCase();
+  pin.style.display = 'none';
 }
 
 /* ---------- tag inspector · tap your own pin to view / edit / delete ---------- */
@@ -602,7 +671,10 @@ let tagSel = null;       // { kind: 'tip'|'place', i: index }
 let tagEdit = false;     // typing edit open
 let tagDelArmed = false; // two-tap delete
 
-const tagSelObj = () => !tagSel ? null : (tagSel.kind === 'tip' ? liveTips[tagSel.i] : livePlaces[tagSel.i]);
+const tagSelObj = () => !tagSel ? null
+  : tagSel.kind === 'tip' ? liveTips[tagSel.i]
+    : tagSel.kind === 'chal' ? liveChallenges[tagSel.i]
+      : livePlaces[tagSel.i];
 
 function renderTagCard() {
   const card = document.getElementById('tag-card');
@@ -611,6 +683,45 @@ function renderTagCard() {
   if (!obj) {
     tagSel = null; tagEdit = false; tagDelArmed = false;
     card.style.display = 'none'; card.innerHTML = '';
+    return;
+  }
+  if (tagSel.kind === 'chal') { /* investigation challenge from the studio */
+    const n = distinctReporters(obj.id);
+    const solved = isSolved(obj.id);
+    const mine = iReported(obj.id);
+    const away = geo && typeof obj.lat === 'number' ? distMeters(geo, obj) : Infinity;
+    const rgb = solved ? '70,211,154' : '255,107,107';
+    const tx = solved ? '#7ce0b8' : '#ff9b9b';
+    const BTN = "cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:7px 11px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;";
+    const NOTE = "display:inline-flex;align-items:center;gap:5px;padding:7px 11px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;";
+    const action = solved
+      ? `<span style="${NOTE}background:rgba(70,211,154,.12);border:1px solid rgba(70,211,154,.4);color:#7ce0b8;"><span class="msr fill" style="font-size:13px;">paid</span>${escT(fmtReward(obj.value))} RELEASED TO ALL REPORTERS</span>`
+      : mine
+        ? `<span style="${NOTE}background:rgba(245,197,66,.1);border:1px solid rgba(245,197,66,.4);color:#ffe39a;"><span class="msr" style="font-size:13px;">hourglass_top</span>YOU REPORTED · WAITING FOR ${REPORTS_NEEDED - n} MORE</span>`
+        : away <= REPORT_RADIUS
+          ? `<span data-action="chal-report" style="${BTN}background:linear-gradient(180deg,#aab6ff,#4458d8);border:1px solid rgba(255,255,255,.4);color:#fff;font-weight:700;"><span class="msr fill" style="font-size:13px;">mic</span>REPORT TO OTTO</span>`
+          : `<span style="${NOTE}background:rgba(255,255,255,.05);border:1px solid rgba(140,165,200,.2);color:#8b97a8;"><span class="msr" style="font-size:13px;">near_me</span>GET WITHIN ${REPORT_RADIUS} M TO REPORT</span>`;
+    card.innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:12px;">
+      <div style="flex:none;width:44px;height:44px;border-radius:13px;background:linear-gradient(180deg,rgba(${rgb},.25),rgba(${rgb},.08));border:1px solid rgba(${rgb},.45);display:flex;align-items:center;justify-content:center;">
+        <span class="msr fill" style="font-size:23px;color:${tx};">${solved ? 'task_alt' : 'apartment'}</span>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;color:${tx};">${solved ? 'SOLVED · CONFIRMED BY ' + n : 'INVESTIGATE · ' + escT(fmtDist(away)).toUpperCase() + ' FROM YOU'}</span>
+          <span data-action="tag-close" style="margin-left:auto;cursor:pointer;width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.06);display:inline-flex;align-items:center;justify-content:center;"><span class="msr" style="font-size:14px;color:#8b97a8;">close</span></span>
+        </div>
+        <div style="font-family:'Saira Semi Condensed',sans-serif;font-weight:600;font-size:18px;line-height:1.05;color:#eef2f7;margin-top:3px;">${escT(obj.addr || obj.title)}</div>
+        ${obj.desc ? `<div style="font-family:'Saira',sans-serif;font-size:12px;color:#94a1b2;margin-top:4px;">${escT(obj.desc)}</div>` : ''}
+        <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;align-items:center;">
+          <span style="${NOTE}padding:4px 8px;background:rgba(95,224,180,.1);border:1px solid rgba(95,224,180,.3);color:#7ce0b8;">${escT(fmtReward(obj.value))}</span>
+          <span style="${NOTE}padding:4px 8px;background:rgba(247,179,43,.1);border:1px solid rgba(247,179,43,.3);color:#f7c45e;">+${obj.xp} XP</span>
+          <span style="${NOTE}padding:4px 8px;background:rgba(255,255,255,.05);border:1px solid rgba(140,165,200,.18);color:#cdd6e2;">${n}/${REPORTS_NEEDED} REPORTS</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;">${action}</div>
+      </div>
+    </div>`;
+    card.style.display = 'block';
     return;
   }
   const isTip = tagSel.kind === 'tip';
@@ -888,6 +999,15 @@ document.getElementById('phone-screen').addEventListener('click', e => {
       tagEdit = false;
       renderTagCard();
       renderLivePins();
+      break;
+    }
+    case 'chal-report': {
+      const c = tagSel && tagSel.kind === 'chal' ? liveChallenges[tagSel.i] : null;
+      if (!c || !geo || distMeters(geo, c) > REPORT_RADIUS || isSolved(c.id) || iReported(c.id)) break;
+      voice.challenge = c;
+      tagSel = null;
+      renderTagCard();
+      show('otto');
       break;
     }
     case 'tag-talk': {
