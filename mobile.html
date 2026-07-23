@@ -169,8 +169,8 @@
         <!-- real tagged places, projected onto the live map -->
         <div id="live-pins" style="position:absolute;inset:0;z-index:6;pointer-events:none;display:none;"></div>
 
-        <!-- player -->
-        <div id="map-player" style="position:absolute;left:50%;top:57%;transform:translate(-50%,-50%);z-index:7;">
+        <!-- player (decorative — taps pass through to pins underneath) -->
+        <div id="map-player" style="position:absolute;left:50%;top:57%;transform:translate(-50%,-50%);z-index:7;pointer-events:none;">
           <div style="position:absolute;left:50%;top:34px;width:90px;height:90px;border-radius:50%;border:3px solid rgba(60,192,224,.7);box-shadow:0 0 26px rgba(4,152,186,.6),inset 0 0 18px rgba(4,152,186,.35);transform:translate(-50%,-50%) rotateX(64deg);animation:shadowpulse 3s ease-in-out infinite;"></div>
           <div style="position:absolute;left:50%;top:34px;width:90px;height:90px;border-radius:50%;border:2px solid rgba(60,192,224,.6);transform:translate(-50%,-50%) rotateX(64deg);animation:ringpulse 2.4s ease-out infinite;"></div>
           <div style="position:relative;animation:bobble2 3s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;">

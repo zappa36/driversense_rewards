@@ -562,63 +562,77 @@ function renderLivePins() {
   renderFlag(liveOn);
   if (!liveOn) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
   const { W, H, xy } = mapProjector(img);
-  const placed = [];
-  /* pins spoken/saved from the same spot stack — nudge them apart */
-  const fit = (x, y) => {
-    while (placed.some(p => Math.abs(p.x - x) < 40 && Math.abs(p.y - y) < 50)) y -= 56;
-    placed.push({ x, y });
-    return { x, y };
-  };
   const onMap = (lat, lng) => {
     const q = xy(lat, lng);
     return (q.x < 26 || q.x > W - 26 || q.y < 150 || q.y > H - 250) ? null : q; // off-screen, or under the HUD/card
   };
-  const pinShell = (x, y, glow, kind, i, inner) => `
-    <div data-action="open-tag" data-kind="${kind}" data-i="${i}" style="position:absolute;left:${Math.round(x)}px;top:${Math.round(y)}px;transform:translate(-50%,-92%);text-align:center;pointer-events:auto;cursor:pointer;">
-      <div style="animation:bobble2 3.2s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;gap:4px;">${inner}</div>
-      <div style="margin:3px auto 0;width:34px;height:11px;border-radius:50%;background:radial-gradient(circle,${glow},transparent 70%);"></div>
-    </div>`;
 
-  const cells = [];
+  /* Icons anchor EXACTLY on their coordinates (never nudged — positions are
+   * truth). Only the labels get de-conflicted: when two would overlap, the
+   * less important one is hidden — the tap card always has the full text.
+   * Priority: your voice tips, then challenges, then saved places. */
+  const TIP_ICONS = { ACCESS: 'elevator', CLOSURE: 'block', HAZARD: 'warning', ENTRANCE: 'door_front', HOURS: 'schedule', INFO: 'info' };
+  const pins = [];
   liveChallenges.forEach((c, i) => {
     const q = onMap(c.lat, c.lng);
     if (!q) return;
-    const { x, y } = fit(q.x, q.y);
     const solved = isSolved(c.id);
     const mine = iReported(c.id);
-    const label = solved ? 'SOLVED ✓' : mine ? `${distinctReporters(c.id)}/${REPORTS_NEEDED} · NEEDS MORE` : 'INVESTIGATE';
-    const rgb = solved ? '70,211,154' : '255,107,107';
-    const tx = solved ? '#7ce0b8' : '#ff9b9b';
-    cells.push(pinShell(x, y, `rgba(${rgb},.45)`, 'chal', i, `
-        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(${rgb},.55);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:${tx};white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis;"><span class="msr fill" style="font-size:10px;">${solved ? 'task_alt' : 'travel_explore'}</span>${label}</span>
-        <div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(180deg,rgba(${solved ? '112,224,176' : '255,143,143'},.95),rgba(${solved ? '24,158,106' : '214,58,58'},.95));border:2px solid rgba(255,255,255,.55);box-shadow:0 8px 18px rgba(${rgb},.5),inset 0 1px 0 rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;${solved ? '' : 'animation:glowpulse 2.4s ease-in-out infinite;'}">
-          <span class="msr fill" style="font-size:24px;color:#fff;">${solved ? 'task_alt' : 'apartment'}</span>
-        </div>`));
+    pins.push({
+      kind: 'chal', i, x: q.x, y: q.y, prio: 1, iconH: 44, anchor: 36,
+      label: solved ? 'SOLVED ✓' : mine ? `${distinctReporters(c.id)}/${REPORTS_NEEDED} · NEEDS MORE` : 'INVESTIGATE',
+      solved, rgb: solved ? '70,211,154' : '255,107,107', tx: solved ? '#7ce0b8' : '#ff9b9b',
+    });
   });
   livePlaces.forEach((p, i) => {
     const q = onMap(p.lat, p.lng);
     if (!q) return;
-    const { x, y } = fit(q.x, q.y);
-    const name = escT(p.name || 'Saved place').toUpperCase();
-    cells.push(pinShell(x, y, 'rgba(4,152,186,.5)', 'place', i, `
-        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(60,192,224,.55);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:#7fd6ea;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;"><span class="msr fill" style="font-size:10px;">bookmark</span>${name}</span>
-        <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(180deg,#3cc0e0,#02769c);border:2px solid rgba(255,255,255,.5);box-shadow:0 7px 16px rgba(4,152,186,.5),inset 0 1px 0 rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;">
-          <span class="msr fill" style="font-size:20px;color:#fff;">bookmark</span>
-        </div>`));
+    pins.push({ kind: 'place', i, x: q.x, y: q.y, prio: 2, iconH: 38, anchor: 33, label: escT(p.name || 'Saved place').toUpperCase() });
   });
-  const TIP_ICONS = { ACCESS: 'elevator', CLOSURE: 'block', HAZARD: 'warning', ENTRANCE: 'door_front', HOURS: 'schedule', INFO: 'info' };
   liveTips.forEach((t, i) => {
     const q = onMap(t.lat, t.lng);
     if (!q) return;
-    const { x, y } = fit(q.x, q.y);
-    const label = escT(t.title || t.transcript || 'Voice tip').toUpperCase();
-    cells.push(pinShell(x, y, 'rgba(245,197,66,.45)', 'tip', i, `
-        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(245,197,66,.5);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:#ffe39a;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis;"><span class="msr fill" style="font-size:10px;">graphic_eq</span>${label}</span>
-        <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(180deg,#ffd95e,#f3ac10);border:2px solid rgba(255,255,255,.55);box-shadow:0 7px 16px rgba(243,172,16,.5),inset 0 1px 0 rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;">
-          <span class="msr fill" style="font-size:20px;color:#5a3d06;">${TIP_ICONS[t.category] || 'info'}</span>
-        </div>`));
+    pins.push({ kind: 'tip', i, x: q.x, y: q.y, prio: 0, iconH: 38, anchor: 33, label: escT(t.title || t.transcript || 'Voice tip').toUpperCase(), icon: TIP_ICONS[t.category] || 'info' });
   });
-  wrap.innerHTML = cells.join('');
+
+  const labelRects = [];
+  [...pins].sort((a, b) => a.prio - b.prio).forEach(p => {
+    const w = Math.min(170, 26 + p.label.length * 5.4);
+    const cy = p.y - (p.anchor + p.iconH / 2 + 12); // label rides above the icon
+    const rect = { l: p.x - w / 2, r: p.x + w / 2, t: cy - 9, b: cy + 9 };
+    p.showLabel = !labelRects.some(o => o.l < rect.r && rect.l < o.r && o.t < rect.b && rect.t < o.b);
+    if (p.showLabel) labelRects.push(rect);
+  });
+
+  /* translate anchors the ICON CENTER on the coordinate; the glow ellipse
+   * below and the label above are decoration */
+  const shell = (p, labelHtml, iconHtml, glow) => `
+    <div data-action="open-tag" data-kind="${p.kind}" data-i="${p.i}" style="position:absolute;left:${Math.round(p.x)}px;top:${Math.round(p.y)}px;transform:translate(-50%,calc(-100% + ${p.anchor}px));text-align:center;pointer-events:auto;cursor:pointer;">
+      <div style="animation:bobble2 3.2s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;gap:4px;">${p.showLabel ? labelHtml : ''}${iconHtml}</div>
+      <div style="margin:3px auto 0;width:34px;height:11px;border-radius:50%;background:radial-gradient(circle,${glow},transparent 70%);"></div>
+    </div>`;
+
+  wrap.innerHTML = pins.map(p => {
+    if (p.kind === 'chal') {
+      return shell(p, `
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(${p.rgb},.55);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:${p.tx};white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis;"><span class="msr fill" style="font-size:10px;">${p.solved ? 'task_alt' : 'travel_explore'}</span>${p.label}</span>`, `
+        <div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(180deg,rgba(${p.solved ? '112,224,176' : '255,143,143'},.95),rgba(${p.solved ? '24,158,106' : '214,58,58'},.95));border:2px solid rgba(255,255,255,.55);box-shadow:0 8px 18px rgba(${p.rgb},.5),inset 0 1px 0 rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;${p.solved ? '' : 'animation:glowpulse 2.4s ease-in-out infinite;'}">
+          <span class="msr fill" style="font-size:24px;color:#fff;">${p.solved ? 'task_alt' : 'apartment'}</span>
+        </div>`, `rgba(${p.rgb},.45)`);
+    }
+    if (p.kind === 'place') {
+      return shell(p, `
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(60,192,224,.55);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:#7fd6ea;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;"><span class="msr fill" style="font-size:10px;">bookmark</span>${p.label}</span>`, `
+        <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(180deg,#3cc0e0,#02769c);border:2px solid rgba(255,255,255,.5);box-shadow:0 7px 16px rgba(4,152,186,.5),inset 0 1px 0 rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;">
+          <span class="msr fill" style="font-size:20px;color:#fff;">bookmark</span>
+        </div>`, 'rgba(4,152,186,.5)');
+    }
+    return shell(p, `
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(245,197,66,.5);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:#ffe39a;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis;"><span class="msr fill" style="font-size:10px;">graphic_eq</span>${p.label}</span>`, `
+        <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(180deg,#ffd95e,#f3ac10);border:2px solid rgba(255,255,255,.55);box-shadow:0 7px 16px rgba(243,172,16,.5),inset 0 1px 0 rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;">
+          <span class="msr fill" style="font-size:20px;color:#5a3d06;">${p.icon}</span>
+        </div>`, 'rgba(245,197,66,.45)');
+  }).join('');
   wrap.style.display = 'block';
 }
 
