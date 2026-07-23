@@ -153,15 +153,29 @@ async function nominatimLookup(q) {
 
 /* ---------- Supabase sync ---------- */
 let syncStatus = 'synced';
-const SYNC_TEXT = { loading: 'SYNCING…', saving: 'SAVING…', synced: '● SYNCED', error: 'SYNC ERROR — RETRY SAVES ON NEXT EDIT' };
+const SYNC_TEXT = { loading: 'SYNCING…', saving: 'SAVING…', synced: '● SYNCED', retry: 'SYNC HICCUP — RETRYING…', error: 'SYNC ERROR — RETRY SAVES ON NEXT EDIT' };
 
 function setSync(s) {
   syncStatus = s;
   const el = document.querySelector('[data-sync]');
   if (el) {
     el.textContent = SYNC_TEXT[s];
-    el.style.color = s === 'error' ? '#ff8a7a' : s === 'synced' ? '#5fe0b4' : '#8b97a8';
+    el.style.color = s === 'error' ? '#ff8a7a' : s === 'retry' ? '#f7c45e' : s === 'synced' ? '#5fe0b4' : '#8b97a8';
   }
+}
+
+/* A failed save retries by itself (4s, then 10s) — a token refresh or a
+ * network blip should never leave a stale SYNC ERROR needing manual edits. */
+function persistWithRetry(run, attempt = 0) {
+  setSync('saving');
+  run().then(() => setSync('synced')).catch(() => {
+    if (attempt < 2) {
+      setSync('retry');
+      setTimeout(() => persistWithRetry(run, attempt + 1), attempt === 0 ? 4000 : 10000);
+    } else {
+      setSync('error');
+    }
+  });
 }
 
 /* Pull the shared library + rules from Supabase (planner session). */
@@ -187,18 +201,18 @@ function persistChallenge(id, delay = 0) {
   if (!DB.enabled) return;
   clearTimeout(saveTimers.get(id));
   saveTimers.set(id, setTimeout(() => {
-    const c = state.chals.find(x => x.id === id);
-    if (!c) return;
-    setSync('saving');
-    DB.upsertChallenge(DB.chalToRow(c)).then(() => setSync('synced')).catch(() => setSync('error'));
+    /* re-read the challenge at (re)try time so retries carry the latest edits */
+    persistWithRetry(() => {
+      const c = state.chals.find(x => x.id === id);
+      return c ? DB.upsertChallenge(DB.chalToRow(c)) : Promise.resolve();
+    });
   }, delay));
 }
 
 function persistDelete(id) {
   if (!DB.enabled) return;
   clearTimeout(saveTimers.get(id));
-  setSync('saving');
-  DB.deleteChallenge(id).then(() => setSync('synced')).catch(() => setSync('error'));
+  persistWithRetry(() => DB.deleteChallenge(id));
 }
 
 let logicTimer = null;
@@ -206,8 +220,7 @@ function persistLogic() {
   if (!DB.enabled) return;
   clearTimeout(logicTimer);
   logicTimer = setTimeout(() => {
-    setSync('saving');
-    DB.saveSettings(DB.logicToRow(state.logic)).then(() => setSync('synced')).catch(() => setSync('error'));
+    persistWithRetry(() => DB.saveSettings(DB.logicToRow(state.logic)));
   }, 300);
 }
 

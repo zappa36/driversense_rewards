@@ -24,14 +24,19 @@ const DB = (() => {
 
   async function refresh() {
     if (!session || !session.refresh_token) return false;
-    const r = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
-      method: 'POST',
-      headers: { apikey: key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: session.refresh_token }),
-    });
-    if (!r.ok) { saveSession(null); return false; }
-    saveSession(await r.json());
-    return true;
+    try {
+      const r = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { apikey: key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: session.refresh_token }),
+      });
+      /* only a rejected token ends the session — a server hiccup or
+       * network blip must not silently sign the planner out */
+      if (r.status === 400 || r.status === 401 || r.status === 403) { saveSession(null); return false; }
+      if (!r.ok) return false;
+      saveSession(await r.json());
+      return true;
+    } catch { return false; }
   }
 
   async function rest(path, opts = {}, useAuth = false, retried = false) {
