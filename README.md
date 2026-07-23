@@ -30,8 +30,12 @@ single-phone prototype with eight connected screens:
 - **City map** (home) → tap the flagged building or its card to **arrive**
   at the place and read tips left by people before you; vote them
   Helped/Outdated. "Something changed? Tell Otto" starts the **voice
-  debrief** — an animated conversation that ends with your note saved and
-  shared, +50 XP, and (this time) a **level-up celebration**.
+  debrief** — with Supabase configured it uses the **phone's real mic**:
+  the clip goes to the `otto` Edge Function, is transcribed and structured
+  by OpenAI, and lands in the `tips` table (see below). Without Supabase
+  (or if the mic is denied) the animated demo conversation runs instead.
+  Either way it ends with your note saved, +50 XP, and a **level-up
+  celebration**.
 - From the map: tap your **avatar** for place mastery & badges, the **rank
   chip** for the leaderboard (working area/team toggles; the season chip
   opens the **Winter Streets season** screen), or the **gold pin** to tag a
@@ -128,6 +132,30 @@ That's it — the apps detect the configuration automatically:
 With `config.js` left empty, everything runs in **local demo mode**: hardcoded
 data, and the studio unlocks with the planner code **`1184`** (defined in
 `auth.js`). Demo mode's gate is browser-only and not real security.
+
+## Otto voice debrief (OpenAI)
+
+With Supabase configured, Otto collects **real voice observations**
+("the elevator is broken", "the road is closed") through an Edge Function
+that transcribes the clip (OpenAI speech-to-text) and structures it into a
+shareable tip (category + one-line summary), saved to the `tips` table.
+
+Setup, once:
+
+1. In the Supabase **SQL editor**, run [`supabase/tips.sql`](supabase/tips.sql).
+2. In the Supabase dashboard, open **Edge Functions → Deploy a new function**,
+   name it exactly `otto`, and paste the contents of
+   [`supabase/functions/otto/index.ts`](supabase/functions/otto/index.ts)
+   (or deploy with the CLI: `supabase functions deploy otto`).
+3. Create an API key at [platform.openai.com](https://platform.openai.com/api-keys)
+   and store it as a **function secret** — Edge Functions → Secrets → add
+   `OPENAI_API_KEY`. **The key lives only there**: server-side, never in
+   `config.js`, the repo, or the browser. The function also refuses
+   requests from other websites and caps clip size, and you should set a
+   monthly spend limit on the OpenAI account as a backstop.
+
+No OpenAI setup → the debrief automatically falls back to the scripted
+demo conversation.
 
 ## Google Maps & Street View
 

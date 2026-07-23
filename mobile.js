@@ -115,6 +115,16 @@ const THINK = `<span class="msr fill" style="font-size:40px;color:#fff;animation
 
 const phaseFor = b => b >= beats.length - 1 ? 'done' : (beats[b].from === 'ai' ? 'listening' : 'thinking');
 
+const escT = s => String(s).replace(/</g, '&lt;');
+const aiBubble = text => `<div style="display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;animation:msgin .3s ease;">
+    <span style="display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;color:#aab6ff;"><span style="width:20px;height:20px;border-radius:6px;background:linear-gradient(180deg,#8b9bff,#4458d8);display:flex;align-items:center;justify-content:center;"><span class="msr fill" style="font-size:12px;color:#fff;">auto_awesome</span></span>OTTO</span>
+    <div style="font-family:'Saira',sans-serif;font-weight:500;font-size:23px;line-height:1.42;color:#eef2f7;max-width:308px;text-wrap:pretty;">${escT(text)}</div>
+  </div>`;
+const driverBubble = text => `<div style="display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;animation:msgin .3s ease;">
+    <span style="display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;color:var(--brand-l,#3cc0e0);"><img src="assets/profile.png" alt="M. Kaur" style="width:20px;height:20px;border-radius:6px;object-fit:cover;display:block;">M. KAUR</span>
+    <div style="font-family:'Saira',sans-serif;font-weight:500;font-size:23px;line-height:1.42;color:#dceaf2;max-width:308px;text-wrap:pretty;">&ldquo;${escT(text)}&rdquo;</div>
+  </div>`;
+
 function renderOtto() {
   const b = beats[beat];
   const phase = phaseFor(beat);
@@ -124,15 +134,7 @@ function renderOtto() {
   el('otto-ring1').style.display = phase === 'listening' ? '' : 'none';
   el('otto-ring2').style.display = phase === 'listening' ? '' : 'none';
 
-  el('otto-msg').innerHTML = b.from === 'ai'
-    ? `<div style="display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;animation:msgin .3s ease;">
-        <span style="display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;color:#aab6ff;"><span style="width:20px;height:20px;border-radius:6px;background:linear-gradient(180deg,#8b9bff,#4458d8);display:flex;align-items:center;justify-content:center;"><span class="msr fill" style="font-size:12px;color:#fff;">auto_awesome</span></span>OTTO</span>
-        <div style="font-family:'Saira',sans-serif;font-weight:500;font-size:23px;line-height:1.42;color:#eef2f7;max-width:308px;text-wrap:pretty;">${b.text}</div>
-      </div>`
-    : `<div style="display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;animation:msgin .3s ease;">
-        <span style="display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;color:var(--brand-l,#3cc0e0);"><img src="assets/profile.png" alt="M. Kaur" style="width:20px;height:20px;border-radius:6px;object-fit:cover;display:block;">M. KAUR</span>
-        <div style="font-family:'Saira',sans-serif;font-weight:500;font-size:23px;line-height:1.42;color:#dceaf2;max-width:308px;text-wrap:pretty;">&ldquo;${b.text}&rdquo;</div>
-      </div>`;
+  el('otto-msg').innerHTML = b.from === 'ai' ? aiBubble(b.text) : driverBubble(b.text);
 
   el('voice-caption').textContent = phase === 'listening' ? 'Listening…' : phase === 'thinking' ? 'Otto is thinking…' : 'Saved to the place';
   el('voice-sub').textContent = phase === 'listening' ? 'Speak now — or tap the mic' : phase === 'thinking' ? 'Structuring your answer' : 'Everyone heading to Nº 47 sees it first';
@@ -162,8 +164,104 @@ function setBeat(n) {
   scheduleOtto();
 }
 
-function ottoStart() { beat = 0; renderOtto(); scheduleOtto(); }
-function ottoStop() { clearTimeout(ottoTimer); clearTimeout(levelTimer); }
+/* ---------- Otto live voice · real mic -> OpenAI via Supabase ---------- */
+/* When Supabase is configured, the debrief records the phone's real mic;
+ * the otto Edge Function (which alone holds the OpenAI key) transcribes
+ * the clip and structures it into a tip saved to the tips table. Without
+ * Supabase, or if the mic is denied, the scripted demo conversation runs. */
+const voice = { mode: 'script', rec: null, busy: false, exchanges: 0 };
+
+const canLiveVoice = () => typeof DB !== 'undefined' && DB.enabled && window.isSecureContext
+  && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && typeof MediaRecorder !== 'undefined';
+
+const placeLabel = () => {
+  const t = document.getElementById('flag-title');
+  return (t && t.textContent) || 'this place';
+};
+
+function renderOttoLive(msg, state) {
+  const el = id => document.getElementById(id);
+  el('otto-face').innerHTML = state === 'think' ? THINK : EYES;
+  el('otto-ring1').style.display = state === 'rec' ? '' : 'none';
+  el('otto-ring2').style.display = state === 'rec' ? '' : 'none';
+  el('otto-msg').innerHTML = msg.from === 'ai' ? aiBubble(msg.text) : driverBubble(msg.text);
+  el('voice-caption').textContent = state === 'rec' ? 'Recording…' : state === 'think' ? 'Otto is thinking…' : 'Tap the mic to talk';
+  el('voice-sub').textContent = state === 'rec' ? 'Tap the mic again to send' : state === 'think' ? 'Transcribing & structuring your note' : 'Real voice — transcribed by OpenAI';
+  el('mic-btn').style.display = state === 'think' ? 'none' : '';
+  el('mic-ring').style.display = state === 'rec' ? '' : 'none';
+  el('done-chip').style.display = voice.exchanges > 0 && theme.gamify ? 'inline-flex' : 'none';
+}
+
+async function ottoMicLive() {
+  if (voice.busy) return;
+  if (voice.rec) { voice.rec.stop(); return; } /* second tap sends the clip */
+  clearTimeout(levelTimer);
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const rec = new MediaRecorder(stream);
+    const chunks = [];
+    rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      voice.rec = null;
+      sendVoiceClip(new Blob(chunks, { type: rec.mimeType || 'audio/webm' }));
+    };
+    voice.rec = rec;
+    rec.start();
+    renderOttoLive({ from: 'ai', text: "I'm listening — tap the mic again when you're done." }, 'rec');
+  } catch { /* mic denied: the tap falls back to the scripted demo */
+    voice.mode = 'script';
+    beat = 0; renderOtto(); scheduleOtto();
+  }
+}
+
+async function sendVoiceClip(blob) {
+  voice.busy = true;
+  const place = placeLabel();
+  renderOttoLive({ from: 'ai', text: 'Got it — one second…' }, 'think');
+  try {
+    const d = await DB.ottoVoice(blob, place);
+    renderOttoLive({ from: 'driver', text: d.transcript }, 'think');
+    DB.insertTip({
+      place, transcript: d.transcript,
+      title: (d.tip && d.tip.title) || null, category: (d.tip && d.tip.category) || null,
+      lat: geo ? geo.lat : null, lng: geo ? geo.lng : null,
+    }).catch(() => { /* tips table missing — the conversation still works */ });
+    voice.exchanges++;
+    if (voice.exchanges === 1) { ottoBonus = 50; renderPoints(); }
+    document.getElementById('done-chip').innerHTML =
+      `<span class="msr fill" style="font-size:14px;color:var(--gold,#FFCC00);">add_circle</span>${voice.exchanges} TIP${voice.exchanges > 1 ? 'S' : ''} SAVED · ${escT((d.tip && d.tip.category) || 'INFO')}`;
+    setTimeout(() => {
+      if (current !== 'otto' || voice.rec) return;
+      renderOttoLive({ from: 'ai', text: d.reply || 'Noted — saved for the next visitor.' }, 'idle');
+      clearTimeout(levelTimer);
+      levelTimer = setTimeout(() => { if (current === 'otto' && !voice.rec && !voice.busy) show('levelup'); }, 3200);
+    }, 1700);
+  } catch (e) {
+    renderOttoLive({ from: 'ai', text: `I couldn't reach the voice service (${(e && e.message) || 'offline'}). Check the otto function is deployed, then tap the mic to try again.` }, 'idle');
+  }
+  voice.busy = false;
+}
+
+function ottoStart() {
+  voice.mode = canLiveVoice() ? 'live' : 'script';
+  voice.exchanges = 0;
+  if (voice.mode === 'live') {
+    renderOttoLive({ from: 'ai', text: `Hey M. Kaur — you're at ${placeLabel()}. What did you find? Tap the mic and just talk.` }, 'idle');
+  } else {
+    beat = 0; renderOtto(); scheduleOtto();
+  }
+}
+
+function ottoStop() {
+  clearTimeout(ottoTimer);
+  clearTimeout(levelTimer);
+  if (voice.rec) {
+    try { voice.rec.onstop = null; voice.rec.stop(); voice.rec.stream.getTracks().forEach(t => t.stop()); } catch { /* already gone */ }
+    voice.rec = null;
+  }
+  voice.busy = false;
+}
 
 /* ---------- phone GPS · tag-a-place ---------- */
 let geo = null;            // { lat, lng, acc } from the device
@@ -587,7 +685,10 @@ document.getElementById('phone-screen').addEventListener('click', e => {
   const act = e.target.closest('[data-action]');
   if (!act) return;
   switch (act.dataset.action) {
-    case 'otto-mic': setBeat(beat + 1); break;
+    case 'otto-mic':
+      if (voice.mode === 'live') ottoMicLive();
+      else setBeat(beat + 1);
+      break;
     case 'lb-depot-mine': lb.depot = 'mine'; renderLeaderboard(); break;
     case 'lb-depot-all': lb.depot = 'all'; renderLeaderboard(); break;
     case 'lb-mode-ind': lb.mode = 'ind'; renderLeaderboard(); break;

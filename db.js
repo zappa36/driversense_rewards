@@ -107,5 +107,21 @@ const DB = (() => {
      * people app has no accounts; see supabase/places.sql). */
     insertPlace: row => rest('/rest/v1/places', { method: 'POST', body: JSON.stringify([row]) }),
     listPlaces: limit => rest('/rest/v1/places?select=*&order=created_at.desc&limit=' + (limit || 20)),
+    insertTip: row => rest('/rest/v1/tips', { method: 'POST', body: JSON.stringify([row]) }),
+    /* Voice debrief: post the recorded clip to the otto Edge Function, which
+     * holds the OpenAI key server-side and returns transcript + reply + tip. */
+    ottoVoice: async (blob, place) => {
+      const fd = new FormData();
+      fd.append('audio', blob, 'clip.' + (blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm'));
+      fd.append('place', place || '');
+      const r = await fetch(`${url}/functions/v1/otto`, {
+        method: 'POST',
+        headers: { apikey: key, Authorization: 'Bearer ' + key }, // no Content-Type: browser sets the multipart boundary
+        body: fd,
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'otto ' + r.status);
+      return d;
+    },
   };
 })();
