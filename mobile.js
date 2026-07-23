@@ -320,10 +320,12 @@ function startGeolocation() {
     geo = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy || 0 };
     geoState = 'fix';
     geoSettled();
+    storeFix();
     setTagChips('GPS ±' + Math.max(1, Math.round(geo.acc)) + ' m');
     document.getElementById('tag-gps-note').textContent = `DROPPED AT ${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)}`;
     document.getElementById('tag-addr').textContent = `${geo.lat.toFixed(4)}°N, ${geo.lng.toFixed(4)}°E`;
     updateLiveMaps();
+    renderLivePins(); /* hide the fiction now — don't wait for the map image */
     reverseGeocode(geo).then(res => {
       if (!res) return;
       if (res.street) {
@@ -334,8 +336,42 @@ function startGeolocation() {
         const chip = document.getElementById('map-area');
         if (chip) chip.textContent = res.area.toUpperCase().slice(0, 16);
       }
+      storeFix({ area: res.area || null });
     });
   }, err => geoFallback(err), { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
+}
+
+/* ---------- instant boot · cached fix kills the Berlin flash ---------- */
+/* The illustrated demo city is the default first paint, so returning users
+ * with location already granted briefly saw Berlin fiction before the real
+ * map loaded. Remember the last fix (plus neighborhood) on-device; on boot,
+ * if permission is already granted, start from it: hide the fiction at
+ * once and load the real map immediately, then the fresh fix corrects it. */
+const FIX_KEY = 'ds_last_fix';
+
+function storeFix(extra) {
+  if (!geo) return;
+  try {
+    const prev = JSON.parse(localStorage.getItem(FIX_KEY) || '{}') || {};
+    localStorage.setItem(FIX_KEY, JSON.stringify({ area: prev.area || null, lat: geo.lat, lng: geo.lng, acc: geo.acc, ...(extra || {}) }));
+  } catch { /* private mode */ }
+}
+
+function primeLiveMap() {
+  if (!window.GMAPS_KEY || !navigator.permissions || !navigator.permissions.query) return;
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(FIX_KEY) || 'null'); } catch { /* private mode */ }
+  if (!cached || typeof cached.lat !== 'number' || typeof cached.lng !== 'number') return;
+  navigator.permissions.query({ name: 'geolocation' }).then(s => {
+    if (s.state !== 'granted' || geo) return; /* prompt/denied: the illustration is the right waiting screen */
+    geo = { lat: cached.lat, lng: cached.lng, acc: cached.acc || 50 };
+    if (cached.area) {
+      const chip = document.getElementById('map-area');
+      if (chip) chip.textContent = String(cached.area).toUpperCase().slice(0, 16);
+    }
+    updateLiveMaps();   /* liveMapState -> 'loading' */
+    renderLivePins();   /* hides the fiction right now, before the image lands */
+  }).catch(() => { /* permissions API unavailable */ });
 }
 
 function geoFallback(err) {
@@ -384,23 +420,31 @@ const centerPlayer = on => {
   if (p) p.style.top = on ? '50%' : '57%'; // 57% = spot in the illustration
 };
 
+let liveMapState = 'off'; // 'off' | 'loading' | 'on' | 'failed' — the map screen's live layer
+
 function updateLiveMaps() {
   const gkey = window.GMAPS_KEY || '';
   [['live-map', 17], ['live-map-tag', 18]].forEach(([id, zoom]) => {
     const img = document.getElementById(id);
     if (!img) return;
-    if (!gkey || !geo) { img.style.display = 'none'; return; }
+    if (!gkey || !geo) {
+      img.style.display = 'none';
+      if (id === 'live-map') liveMapState = 'off';
+      return;
+    }
     img.onload = () => {
       img.style.display = 'block';
-      if (id === 'live-map') { centerPlayer(true); renderLivePins(); }
+      if (id === 'live-map') { liveMapState = 'on'; centerPlayer(true); renderLivePins(); }
     };
     img.onerror = () => {
       img.style.display = 'none';
-      if (id === 'live-map') { centerPlayer(false); renderLivePins(); }
+      if (id === 'live-map') { liveMapState = 'failed'; centerPlayer(false); renderLivePins(); }
     };
-    img.src = 'https://maps.googleapis.com/maps/api/staticmap'
+    const src = 'https://maps.googleapis.com/maps/api/staticmap'
       + `?center=${geo.lat},${geo.lng}&zoom=${zoom}&size=390x640&scale=2`
       + `&${MAP_STYLE_QS}&key=${gkey}`;
+    if (id === 'live-map' && img.src !== src && liveMapState !== 'on') liveMapState = 'loading';
+    img.src = src;
   });
 }
 
@@ -409,6 +453,7 @@ function hideLiveMaps() {
     const img = document.getElementById(id);
     if (img) { img.onerror = null; img.removeAttribute('src'); img.style.display = 'none'; }
   });
+  liveMapState = 'off';
   centerPlayer(false);
   renderLivePins();
 }
@@ -450,7 +495,9 @@ function renderLivePins() {
   const wrap = document.getElementById('live-pins');
   const img = document.getElementById('live-map');
   if (!wrap || !img) return;
-  const liveOn = !!geo && img.style.display === 'block';
+  /* 'loading' counts as live: the fiction must not flash back in while the
+   * map image is still on its way */
+  const liveOn = !!geo && (liveMapState === 'on' || liveMapState === 'loading');
   /* the illustration's fictional pins make no sense on the real map */
   document.querySelectorAll('.design-pin').forEach(el => { el.style.display = liveOn ? 'none' : ''; });
   renderFlag(liveOn);
@@ -885,4 +932,5 @@ renderPoints();
 renderLeaderboard();
 loadSeasonChallenges();
 loadPlaces();
+primeLiveMap();     // returning users: real map first, no illustrated flash
 startGeolocation(); // the map is the home screen — center it on the real position
