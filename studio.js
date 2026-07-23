@@ -77,13 +77,37 @@ const newId = () => 'c' + (++idSeq);
 let addrSuggestions = [];
 let addrTimer = null;
 
+const CAN_LOOKUP = () => !!GMAPS || (typeof DB !== 'undefined' && DB.enabled);
+
 function scheduleAddrLookup(q) {
   clearTimeout(addrTimer);
-  if (!GMAPS || !q || q.trim().length < 4) {
+  if (!CAN_LOOKUP() || !q || q.trim().length < 4) {
     if (addrSuggestions.length) { addrSuggestions = []; render(); }
     return;
   }
   addrTimer = setTimeout(async () => {
+    /* pin-drop backstop: paste "25.1183, 121.5091" (e.g. copied from the
+     * Google Maps app) to place the challenge exactly there */
+    const m = q.trim().match(/^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/);
+    if (m && Math.abs(+m[1]) <= 90 && Math.abs(+m[2]) <= 180) {
+      addrSuggestions = [{ label: `Dropped pin · ${(+m[1]).toFixed(5)} ${(+m[2]).toFixed(5)}`, lat: +m[1], lng: +m[2], area: null }];
+      render();
+      return;
+    }
+    /* server-side Google via the geocode Edge Function first (worldwide,
+     * key held in Supabase secrets), then the browser key, then OSM */
+    if (typeof DB !== 'undefined' && DB.enabled) {
+      try {
+        const d = await DB.geocode({ q });
+        if (d && Array.isArray(d.results) && d.results.length) {
+          addrSuggestions = d.results.slice(0, 4);
+          render();
+          return;
+        }
+        if (d && d.status === 'ZERO_RESULTS') { addrSuggestions = []; render(); return; }
+      } catch { /* function not deployed — fall through */ }
+    }
+    if (!GMAPS) { addrSuggestions = await nominatimLookup(q); render(); return; }
     try {
       const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&bounds=52.33,13.08%7C52.68,13.77&key=${GMAPS}`);
       const d = await r.json();
@@ -105,11 +129,12 @@ function scheduleAddrLookup(q) {
 }
 
 /* OpenStreetMap fallback when Google Geocoding rejects the key (the web
- * service refuses referrer-restricted keys) or is unreachable. */
+ * service refuses referrer-restricted keys) or is unreachable. Worldwide —
+ * it's the last resort, so no regional bias. */
 async function nominatimLookup(q) {
   try {
     const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=4&addressdetails=1'
-      + '&viewbox=13.08,52.68,13.77,52.33&q=' + encodeURIComponent(q));
+      + '&q=' + encodeURIComponent(q));
     if (!r.ok) return [];
     return (await r.json()).map(res => {
       const a = res.address || {};
@@ -315,9 +340,9 @@ function renderEditor() {
       <textarea data-input="desc" rows="2" style="${FIELD}resize:vertical;padding:11px 13px;color:#cdd6e2;font-family:'Saira',sans-serif;font-size:13.5px;line-height:1.5;">${esc(f.desc)}</textarea>
     </div>
     <div style="margin-top:16px;">
-      <div style="${LABEL}">PLACE · ADDRESS${GMAPS ? ` <span style="color:#5f6e80;">· GOOGLE MAPS LOOKUP</span>` : ''}</div>
+      <div style="${LABEL}">PLACE · ADDRESS${CAN_LOOKUP() ? ` <span style="color:#5f6e80;">· MAPS LOOKUP OR "LAT, LNG"</span>` : ''}</div>
       <div style="position:relative;">
-        <input data-input="addr" value="${esc(f.addr || '')}" placeholder="${GMAPS ? 'Search a real address — e.g. Rykestraße 21' : 'Address label shown on the driver card'}" autocomplete="off" style="${FIELD}padding:11px 13px;font-family:'Saira',sans-serif;font-size:13.5px;">
+        <input data-input="addr" value="${esc(f.addr || '')}" placeholder="${CAN_LOOKUP() ? 'Search a real address — or paste coordinates like 25.1183, 121.5091' : 'Address label shown on the driver card'}" autocomplete="off" style="${FIELD}padding:11px 13px;font-family:'Saira',sans-serif;font-size:13.5px;">
         ${addrSuggestions.length ? `<div style="position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:20;border-radius:12px;border:1px solid rgba(4,152,186,.4);background:rgba(7,13,22,.97);overflow:hidden;box-shadow:0 18px 40px -12px rgba(0,0,0,.8);">
           ${addrSuggestions.map((s, i) => `<div data-action="pick-addr" data-i="${i}" style="display:flex;align-items:center;gap:9px;padding:10px 13px;cursor:pointer;border-bottom:1px solid rgba(140,165,200,.08);" onmouseover="this.style.background='rgba(4,152,186,.12)'" onmouseout="this.style.background='transparent'">
             <span class="msr fill" style="font-size:15px;color:#3cc0e0;pointer-events:none;">location_on</span>

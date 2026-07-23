@@ -757,8 +757,14 @@ function renderTagCard() {
 }
 
 async function reverseGeocode({ lat, lng }) {
-  /* Google Geocoding when a key is configured (better street-level
-   * coverage worldwide), OpenStreetMap Nominatim as fallback. */
+  /* Server-side Google via the geocode Edge Function first (worldwide
+   * coverage, key in Supabase secrets), then the browser key, then OSM. */
+  if (typeof DB !== 'undefined' && DB.enabled) {
+    try {
+      const d = await DB.geocode({ lat, lng });
+      if (d && (d.street || d.area)) return d;
+    } catch { /* function not deployed — fall through */ }
+  }
   const gkey = window.GMAPS_KEY || '';
   if (gkey) {
     try {

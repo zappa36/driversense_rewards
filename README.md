@@ -171,6 +171,28 @@ Setup, once:
 No OpenAI setup → the debrief automatically falls back to the scripted
 demo conversation.
 
+## Server-side geocoding (worldwide addresses)
+
+The browser Maps key is referrer-locked, and Google's Geocoding web
+service refuses referrer-locked keys, so address lookup falls back to
+OpenStreetMap — which has weak coverage outside Europe (Taiwanese house
+numbers, for example, mostly aren't in it). The
+[`supabase/functions/geocode`](supabase/functions/geocode/index.ts) Edge
+Function fixes this with a **second, server-side Google key** that never
+reaches the browser:
+
+1. Google Cloud console → Credentials → Create credentials → API key.
+   Under **API restrictions** tick only **Geocoding API**; leave
+   application restrictions off (the key lives server-side).
+2. Supabase → Edge Functions → deploy a new function named `geocode`
+   (paste the file), then add the key as the secret `GMAPS_SERVER_KEY`.
+
+The studio's address lookup and the mobile app's street names then use
+Google worldwide, with the previous fallbacks kept. Without the function,
+the studio also accepts **pasted coordinates** ("25.1183, 121.5091" —
+long-press a spot in the Google Maps app to copy them) to drop a
+challenge pin anywhere.
+
 ## Google Maps & Street View
 
 Every challenge and stop is a real, geocoded Berlin address, and the app is

@@ -115,6 +115,17 @@ const DB = (() => {
     deleteTip: id => rest('/rest/v1/tips?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }),
     insertReport: row => rest('/rest/v1/reports', { method: 'POST', body: JSON.stringify([row]) }),
     listReports: limit => rest('/rest/v1/reports?select=challenge_id,device,created_at&order=created_at.desc&limit=' + (limit || 500)),
+    /* Server-side Google geocoding via the geocode Edge Function (its key
+     * never reaches the browser). Throws when the function isn't deployed. */
+    geocode: async body => {
+      const r = await fetch(`${url}/functions/v1/geocode`, {
+        method: 'POST',
+        headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error('geocode ' + r.status);
+      return r.json();
+    },
     /* Voice debrief: post the recorded clip to the otto Edge Function, which
      * holds the OpenAI key server-side and returns transcript + reply + tip. */
     ottoVoice: async (blob, place) => {
