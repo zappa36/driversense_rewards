@@ -108,6 +108,7 @@ const DB = (() => {
     insertPlace: row => rest('/rest/v1/places', { method: 'POST', body: JSON.stringify([row]) }),
     listPlaces: limit => rest('/rest/v1/places?select=*&order=created_at.desc&limit=' + (limit || 20)),
     insertTip: row => rest('/rest/v1/tips', { method: 'POST', body: JSON.stringify([row]) }),
+    listTips: limit => rest('/rest/v1/tips?select=*&order=created_at.desc&limit=' + (limit || 30)),
     /* Voice debrief: post the recorded clip to the otto Edge Function, which
      * holds the OpenAI key server-side and returns transcript + reply + tip. */
     ottoVoice: async (blob, place) => {

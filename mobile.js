@@ -222,11 +222,14 @@ async function sendVoiceClip(blob) {
   try {
     const d = await DB.ottoVoice(blob, place);
     renderOttoLive({ from: 'driver', text: d.transcript }, 'think');
-    DB.insertTip({
+    if (geoState === 'locating') await waitForFix(); /* pin the tip where it was spoken */
+    const row = {
       place, transcript: d.transcript,
       title: (d.tip && d.tip.title) || null, category: (d.tip && d.tip.category) || null,
       lat: geo ? geo.lat : null, lng: geo ? geo.lng : null,
-    }).catch(() => { /* tips table missing — the conversation still works */ });
+    };
+    DB.insertTip(row).catch(() => { /* tips table missing — the conversation still works */ });
+    if (geo) { liveTips.unshift(row); renderLivePins(); } /* tag the map right away */
     voice.exchanges++;
     if (voice.exchanges === 1) { ottoBonus = 50; renderPoints(); }
     document.getElementById('done-chip').innerHTML =
@@ -388,16 +391,20 @@ function hideLiveMaps() {
   renderLivePins();
 }
 
-/* ---------- real tagged places, pinned on the live map ---------- */
+/* ---------- real tagged places & voice tips, pinned on the live map ---------- */
 let livePlaces = [];
+let liveTips = [];
 
 function loadPlaces() {
   const local = () => { try { return JSON.parse(localStorage.getItem('ds_places') || '[]'); } catch { return []; } };
-  const remote = (typeof DB !== 'undefined' && DB.enabled)
-    ? DB.listPlaces(50).catch(() => []) : Promise.resolve([]);
-  remote.then(rows => {
+  const on = typeof DB !== 'undefined' && DB.enabled;
+  Promise.all([
+    on ? DB.listPlaces(50).catch(() => []) : Promise.resolve([]),
+    on ? DB.listTips(50).catch(() => []) : Promise.resolve([]),
+  ]).then(([rows, tips]) => {
     livePlaces = (rows || []).concat(local()).filter(p =>
       typeof p.lat === 'number' && typeof p.lng === 'number' && !String(p.name || '').startsWith('Demo spot'));
+    liveTips = (tips || []).filter(t => typeof t.lat === 'number' && typeof t.lng === 'number');
     renderLivePins();
   });
 }
@@ -427,21 +434,48 @@ function renderLivePins() {
   renderFlag(liveOn);
   if (!liveOn) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
   const { W, H, xy } = mapProjector(img);
-  wrap.innerHTML = livePlaces.map(p => {
-    const { x, y } = xy(p.lat, p.lng);
-    if (x < 26 || x > W - 26 || y < 150 || y > H - 250) return ''; // off-screen, or under the HUD/card
-    const name = String(p.name || 'Saved place').replace(/</g, '&lt;').toUpperCase();
-    return `
+  const placed = [];
+  /* pins spoken/saved from the same spot stack — nudge them apart */
+  const fit = (x, y) => {
+    while (placed.some(p => Math.abs(p.x - x) < 40 && Math.abs(p.y - y) < 50)) y -= 56;
+    placed.push({ x, y });
+    return { x, y };
+  };
+  const onMap = (lat, lng) => {
+    const q = xy(lat, lng);
+    return (q.x < 26 || q.x > W - 26 || q.y < 150 || q.y > H - 250) ? null : q; // off-screen, or under the HUD/card
+  };
+  const pinShell = (x, y, glow, inner) => `
     <div style="position:absolute;left:${Math.round(x)}px;top:${Math.round(y)}px;transform:translate(-50%,-92%);text-align:center;">
-      <div style="animation:bobble2 3.2s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <div style="animation:bobble2 3.2s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;gap:4px;">${inner}</div>
+      <div style="margin:3px auto 0;width:34px;height:11px;border-radius:50%;background:radial-gradient(circle,${glow},transparent 70%);"></div>
+    </div>`;
+
+  const cells = [];
+  livePlaces.forEach(p => {
+    const q = onMap(p.lat, p.lng);
+    if (!q) return;
+    const { x, y } = fit(q.x, q.y);
+    const name = escT(p.name || 'Saved place').toUpperCase();
+    cells.push(pinShell(x, y, 'rgba(4,152,186,.5)', `
         <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(60,192,224,.55);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:#7fd6ea;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;"><span class="msr fill" style="font-size:10px;">bookmark</span>${name}</span>
         <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(180deg,#3cc0e0,#02769c);border:2px solid rgba(255,255,255,.5);box-shadow:0 7px 16px rgba(4,152,186,.5),inset 0 1px 0 rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;">
           <span class="msr fill" style="font-size:20px;color:#fff;">bookmark</span>
-        </div>
-      </div>
-      <div style="margin:3px auto 0;width:34px;height:11px;border-radius:50%;background:radial-gradient(circle,rgba(4,152,186,.5),transparent 70%);"></div>
-    </div>`;
-  }).join('');
+        </div>`));
+  });
+  const TIP_ICONS = { ACCESS: 'elevator', CLOSURE: 'block', HAZARD: 'warning', ENTRANCE: 'door_front', HOURS: 'schedule', INFO: 'info' };
+  liveTips.forEach(t => {
+    const q = onMap(t.lat, t.lng);
+    if (!q) return;
+    const { x, y } = fit(q.x, q.y);
+    const label = escT(t.title || t.transcript || 'Voice tip').toUpperCase();
+    cells.push(pinShell(x, y, 'rgba(245,197,66,.45)', `
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:rgba(8,18,16,.85);border:1px solid rgba(245,197,66,.5);box-shadow:0 3px 9px rgba(0,0,0,.4);font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.04em;color:#ffe39a;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis;"><span class="msr fill" style="font-size:10px;">graphic_eq</span>${label}</span>
+        <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(180deg,#ffd95e,#f3ac10);border:2px solid rgba(255,255,255,.55);box-shadow:0 7px 16px rgba(243,172,16,.5),inset 0 1px 0 rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;">
+          <span class="msr fill" style="font-size:20px;color:#5a3d06;">${TIP_ICONS[t.category] || 'info'}</span>
+        </div>`));
+  });
+  wrap.innerHTML = cells.join('');
   wrap.style.display = 'block';
 }
 
