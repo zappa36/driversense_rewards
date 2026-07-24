@@ -67,6 +67,7 @@ const stack = [];
 function show(name, push = true) {
   if (!screens[name] || name === current) return;
   if (current === 'otto') ottoStop();
+  if (current === 'tag') tagVoiceStop();
   if (push) stack.push(current);
   screens[current].classList.remove('active');
   current = name;
@@ -75,7 +76,7 @@ function show(name, push = true) {
   void el.offsetWidth; // restart the enter animation
   el.classList.add('active');
   if (name === 'otto') ottoStart();
-  if (name === 'tag') startGeolocation();
+  if (name === 'tag') { startGeolocation(); tagVoiceReset(); }
   if (name === 'map') stack.length = 0;
 }
 
@@ -763,7 +764,7 @@ function renderTagCard() {
             <span data-action="tag-type-save" style="${BTN}background:linear-gradient(180deg,#ffd95e,#f3ac10);color:#5a3d06;border:1px solid rgba(255,255,255,.4);font-weight:700;">SAVE</span>
           </div>`
     : `<div style="font-family:'Saira Semi Condensed',sans-serif;font-weight:600;font-size:18px;line-height:1.05;color:#eef2f7;margin-top:3px;">${escT(titleText)}</div>`}
-        ${isTip && obj.transcript && !tagEdit ? `<div style="font-family:'Saira',sans-serif;font-size:12px;color:#94a1b2;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">&ldquo;${escT(obj.transcript)}&rdquo;</div>` : ''}
+        ${!tagEdit && (isTip ? obj.transcript : obj.note) ? `<div style="font-family:'Saira',sans-serif;font-size:12px;color:#94a1b2;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">&ldquo;${escT(isTip ? obj.transcript : obj.note)}&rdquo;</div>` : ''}
         <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;">
           ${isTip ? `<span data-action="tag-talk" style="${BTN}background:rgba(124,140,255,.14);border:1px solid rgba(124,140,255,.4);color:#aab6ff;"><span class="msr fill" style="font-size:13px;">mic</span>RETELL OTTO</span>` : ''}
           <span data-action="tag-type" style="${BTN}background:rgba(${accent},.12);border:1px solid rgba(${accent},.4);color:${text};"><span class="msr" style="font-size:13px;">edit</span>TYPE</span>
@@ -818,6 +819,72 @@ async function reverseGeocode({ lat, lng }) {
   } catch { return null; }
 }
 
+/* ---------- tag screen · real voice note through Otto ---------- */
+const tagVoice = { rec: null, busy: false, note: null, title: null };
+
+function setTagVoiceUI(state, heard) {
+  const q = document.getElementById('tag-voice-q');
+  const st = document.getElementById('tag-voice-status');
+  if (q) {
+    q.innerHTML = state === 'rec' ? '&ldquo;I&rsquo;m listening&hellip;&rdquo;'
+      : state === 'think' ? '&ldquo;Got it — one second&hellip;&rdquo;'
+        : state === 'done' ? '&ldquo;Noted — add more, or hit Save.&rdquo;'
+          : state === 'denied' ? '&ldquo;I can&rsquo;t hear — allow the microphone.&rdquo;'
+            : '&ldquo;What&rsquo;s here? A name, a note — anything.&rdquo;';
+  }
+  if (st) st.textContent = state === 'rec' ? 'Recording · tap the mic to send' : state === 'think' ? 'Transcribing your note' : 'Tap the mic and talk';
+  const heardEl = document.getElementById('tag-heard');
+  if (heard && heardEl) heardEl.innerHTML = `&ldquo;${escT(heard)}&rdquo;`;
+}
+
+function tagVoiceStop() {
+  if (tagVoice.rec) {
+    try { tagVoice.rec.onstop = null; tagVoice.rec.stop(); tagVoice.rec.stream.getTracks().forEach(t => t.stop()); } catch { /* already gone */ }
+    tagVoice.rec = null;
+  }
+  tagVoice.busy = false;
+}
+
+function tagVoiceReset() {
+  tagVoiceStop();
+  tagVoice.note = null;
+  tagVoice.title = null;
+  if (canLiveVoice()) setTagVoiceUI('idle', 'Nothing yet — tap the mic and talk');
+}
+
+async function tagMicTap() {
+  if (tagVoice.busy || !canLiveVoice()) return; /* demo mode: decorative */
+  if (tagVoice.rec) { tagVoice.rec.stop(); return; } /* second tap sends */
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const rec = new MediaRecorder(stream);
+    const chunks = [];
+    rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      tagVoice.rec = null;
+      sendTagClip(new Blob(chunks, { type: rec.mimeType || 'audio/webm' }));
+    };
+    tagVoice.rec = rec;
+    rec.start();
+    setTagVoiceUI('rec');
+  } catch { setTagVoiceUI('denied'); }
+}
+
+async function sendTagClip(blob) {
+  tagVoice.busy = true;
+  setTagVoiceUI('think');
+  try {
+    const d = await DB.ottoVoice(blob, placeLabel());
+    tagVoice.note = d.transcript;
+    tagVoice.title = (d.tip && d.tip.title) || null;
+    setTagVoiceUI('done', d.transcript);
+  } catch (e) {
+    setTagVoiceUI('idle', `Couldn't reach the voice service (${(e && e.message) || 'offline'}) — try again`);
+  }
+  tagVoice.busy = false;
+}
+
 function localSavePlace(row) {
   try {
     const list = JSON.parse(localStorage.getItem('ds_places') || '[]');
@@ -844,8 +911,9 @@ async function saveTaggedPlace() {
 
   const row = geo
     ? {
-        name: geoAddr || `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`,
-        note: 'Tiny bakery — cash only, the cinnamon knots go fast',
+        /* the spoken note names the place; street or coordinates otherwise */
+        name: tagVoice.title || geoAddr || `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`,
+        note: tagVoice.note,
         lat: geo.lat, lng: geo.lng,
         accuracy: Math.round((geo.acc || 0) * 10) / 10,
       }
@@ -988,6 +1056,9 @@ document.getElementById('phone-screen').addEventListener('click', e => {
       break;
     case 'tag-save':
       saveTaggedPlace();
+      break;
+    case 'tag-mic':
+      tagMicTap();
       break;
     case 'open-tag':
       tagSel = { kind: act.dataset.kind, i: +act.dataset.i };
