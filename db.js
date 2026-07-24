@@ -22,21 +22,30 @@ const DB = (() => {
     try { s ? localStorage.setItem(SKEY, JSON.stringify(s)) : localStorage.removeItem(SKEY); } catch { /* private mode */ }
   };
 
-  async function refresh() {
-    if (!session || !session.refresh_token) return false;
-    try {
-      const r = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
-        method: 'POST',
-        headers: { apikey: key, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: session.refresh_token }),
-      });
-      /* only a rejected token ends the session — a server hiccup or
-       * network blip must not silently sign the planner out */
-      if (r.status === 400 || r.status === 401 || r.status === 403) { saveSession(null); return false; }
-      if (!r.ok) return false;
-      saveSession(await r.json());
-      return true;
-    } catch { return false; }
+  /* Single-flight: refresh tokens are one-time-use, so concurrent saves
+   * hitting 401 together must share ONE refresh — racing would consume the
+   * token in one call and get the others rejected (a stale SYNC ERROR). */
+  let refreshing = null;
+  function refresh() {
+    if (!refreshing) {
+      refreshing = (async () => {
+        if (!session || !session.refresh_token) return false;
+        try {
+          const r = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
+            method: 'POST',
+            headers: { apikey: key, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: session.refresh_token }),
+          });
+          /* only a rejected token ends the session — a server hiccup or
+           * network blip must not silently sign the planner out */
+          if (r.status === 400 || r.status === 401 || r.status === 403) { saveSession(null); return false; }
+          if (!r.ok) return false;
+          saveSession(await r.json());
+          return true;
+        } catch { return false; }
+      })().finally(() => { refreshing = null; });
+    }
+    return refreshing;
   }
 
   async function rest(path, opts = {}, useAuth = false, retried = false) {

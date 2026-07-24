@@ -834,7 +834,9 @@ function toDriverChal(c, i) {
     zone: String(c.zone).toUpperCase(), left: `${c.days}D LEFT`, tier: c.tier,
     unit: `${c.goal} ${c.unit}`, addr: c.addr || c.zone, desc: c.desc,
     lat: coords.lat, lng: coords.lng,
-    svLoc: c.addr ? undefined : `${coords.lat},${coords.lng}`,
+    /* exact coordinates beat address-string geocoding — addresses outside
+     * Berlin used to all snap to the same fallback panorama */
+    svLoc: `${coords.lat},${coords.lng}`,
     boost: c.boost,
     patch: PATCH_POOL[i % PATCH_POOL.length],
   };
