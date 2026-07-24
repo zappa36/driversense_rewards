@@ -33,6 +33,7 @@ const state = {
     { id: 'c6', title: 'District Master: Prenzlauer Berg', desc: 'Own your home zone this weekend — leave every stop verified, coded and noted.', zone: 'Prenzlauer Berg', tier: 'EPIC', unit: 'STOPS', goal: 12, days: 2, value: 15, xp: 400, boost: true, status: 'DRAFT' },
   ],
   logic: { mode: 'euro', s3: 2.2, s7: 3.5, s14: 5, cashMin: 25, dailyCap: 15, autoConf: 90, photoTier: 'EPIC', budget: 1800, spent: 642 },
+  route: { data: null, rawText: '', budget: 60, error: null, lastGen: null },
 };
 
 /* ---------- static data ---------- */
@@ -224,6 +225,154 @@ function persistLogic() {
   }, 300);
 }
 
+/* ---------- route intelligence · auto-challenges from delivery delays ----------
+ * The carrier sees WHERE deliveries run behind plan, never WHY: a broken
+ * elevator or a closed road just shows up as lost minutes at one location.
+ * This module ingests per-stop delivery timings (dummy data until the real
+ * feed exists), aggregates delay per location, ranks the friction hotspots,
+ * splits a route budget across them, and generates investigation challenges
+ * that flow into the same pipeline as hand-made ones. */
+
+const ROUTE_FMT = `{
+  "route": "TPE-BEITOU-01",
+  "days": [
+    { "date": "2026-07-18",
+      "stops": [
+        { "address": "Lane 81, Huaide St 12",
+          "area": "Beitou District",
+          "lat": 25.11448, "lng": 121.51936,
+          "planned_min": 3.0, "actual_min": 9.6 }
+      ] }
+  ]
+}`;
+
+const HOTSPOT_MIN_DELAY = 2;  // avg minutes behind plan before a location counts
+const HOTSPOT_MIN_VISITS = 3; // one bad day is noise; a pattern is a signal
+const AUTO_MIN_REWARD = 4;
+const AUTO_MAX_REWARD = 20;
+
+/* deterministic PRNG so the demo route is identical on every load */
+const mulberry = seed => () => {
+  seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+  let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+  return ((t ^ t >>> 14) >>> 0) / 4294967296;
+};
+
+function makeDemoRoute() {
+  /* a week of deliveries on a loop through Beitou, Taipei — three locations
+   * carry engineered friction (a lift, road works, a moved entrance) */
+  const rnd = mulberry(20260724);
+  const STOPS = [
+    { address: 'Lane 81, Huaide St 12', lat: 25.11448, lng: 121.51936, bias: 6.5 },
+    { address: 'Zhenhua St 33', lat: 25.11623, lng: 121.51733, bias: 4.3 },
+    { address: 'Mingde Rd 152', lat: 25.11704, lng: 121.52102, bias: 2.9 },
+    { address: 'Huaide St 41', lat: 25.11342, lng: 121.51969, bias: 0 },
+    { address: 'Lane 75, Huaide St 8', lat: 25.11321, lng: 121.51893, bias: 0 },
+    { address: 'Ronghua 3rd Rd 19', lat: 25.11364, lng: 121.52055, bias: 0 },
+    { address: 'Lane 98, Huaide St 5', lat: 25.11413, lng: 121.52079, bias: 0 },
+    { address: 'Dongyang St 27', lat: 25.11215, lng: 121.51826, bias: 0 },
+    { address: 'Yumin Rd 60', lat: 25.11278, lng: 121.51684, bias: 0 },
+    { address: 'Lane 114, Yuminli 3', lat: 25.11398, lng: 121.51776, bias: 0 },
+    { address: 'Zhonghe St 88', lat: 25.11536, lng: 121.51571, bias: 0 },
+    { address: 'Mingde Rd 210', lat: 25.11774, lng: 121.52233, bias: 0 },
+  ];
+  const days = [];
+  for (let d = 0; d < 7; d++) {
+    days.push({
+      date: `2026-07-${17 + d}`,
+      stops: STOPS.map(s => {
+        const planned = 2.5 + Math.round(rnd() * 20) / 10;
+        const actual = Math.max(1, planned + (s.bias ? s.bias * (0.75 + rnd() * 0.5) : 0) + (rnd() - 0.45) * 1.6);
+        return {
+          address: s.address, area: 'Beitou District', lat: s.lat, lng: s.lng,
+          planned_min: Math.round(planned * 10) / 10, actual_min: Math.round(actual * 10) / 10,
+        };
+      }),
+    });
+  }
+  return { route: 'TPE-BEITOU-01', days };
+}
+
+function normalizeRoute(raw) {
+  const days = Array.isArray(raw) ? raw : raw.days ? raw.days : raw.stops ? [raw] : null;
+  if (!days || !days.length) throw new Error('Expected { route, days: [{ date, stops: [...] }] } — see the placeholder for the format.');
+  const clean = days.map(d => ({
+    date: d.date || '',
+    stops: (d.stops || [])
+      .filter(s => s && s.address && isFinite(+s.lat) && isFinite(+s.lng) && isFinite(+s.planned_min) && isFinite(+s.actual_min))
+      .map(s => ({ address: String(s.address), area: s.area || null, lat: +s.lat, lng: +s.lng, planned: +s.planned_min, actual: +s.actual_min })),
+  }));
+  if (!clean.reduce((a, d) => a + d.stops.length, 0)) {
+    throw new Error('No valid stops — each needs address, lat, lng, planned_min, actual_min.');
+  }
+  return { route: raw.route || 'UNNAMED ROUTE', days: clean };
+}
+
+function routeStats(data) {
+  const locs = new Map();
+  let visits = 0, delayed = 0;
+  data.days.forEach(d => d.stops.forEach(s => {
+    visits++;
+    const delay = s.actual - s.planned;
+    if (delay >= HOTSPOT_MIN_DELAY) delayed++;
+    const L = locs.get(s.address) || { address: s.address, area: s.area, lat: s.lat, lng: s.lng, n: 0, lost: 0 };
+    L.n++;
+    L.lost += Math.max(0, delay);
+    locs.set(s.address, L);
+  }));
+  const all = [...locs.values()].map(L => ({ ...L, avg: L.lost / L.n }));
+  return {
+    days: data.days.length, visits, delayed, locations: all.length,
+    hotspots: all.filter(L => L.n >= HOTSPOT_MIN_VISITS && L.avg >= HOTSPOT_MIN_DELAY).sort((a, b) => b.lost - a.lost),
+  };
+}
+
+/* Budget orchestration: split the route budget over hotspots in proportion
+ * to the minutes each one costs. Hotspots that don't fit wait — the worst
+ * offenders are funded first. */
+function allocateRewards(hotspots, budget) {
+  const totalLost = hotspots.reduce((a, h) => a + h.lost, 0) || 1;
+  const out = [];
+  let remaining = budget;
+  for (const h of hotspots) {
+    const share = Math.round(budget * (h.lost / totalLost) * 2) / 2;
+    const value = Math.max(AUTO_MIN_REWARD, Math.min(AUTO_MAX_REWARD, share));
+    if (value > remaining + 1e-9) break;
+    remaining = Math.round((remaining - value) * 100) / 100;
+    out.push({ ...h, value });
+  }
+  return out;
+}
+
+const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+
+function generateAutoChallenges(live) {
+  const data = state.route.data;
+  if (!data) return;
+  const picks = allocateRewards(routeStats(data).hotspots, state.route.budget);
+  let made = 0, updated = 0;
+  picks.forEach(h => {
+    const id = 'auto-' + slug(data.route) + '-' + slug(h.address);
+    const fields = {
+      title: 'Investigate ' + h.address,
+      desc: `This spot has been running ~${h.avg.toFixed(1)} min slower than usual. Go take a look — is something broken, closed or moved? Tell Otto what you find.`,
+      zone: h.area || data.route,
+      tier: h.avg >= 5 ? 'EPIC' : h.avg >= 3 ? 'MEDIUM' : 'EASY',
+      unit: 'NOTES', goal: 2, days: 7,
+      value: h.value, xp: Math.round(h.value * 20), boost: false,
+      addr: h.address, lat: h.lat, lng: h.lng,
+      status: live ? 'LIVE' : 'DRAFT',
+    };
+    const existing = state.chals.find(c => c.id === id);
+    if (existing) { Object.assign(existing, fields); updated++; }
+    else { state.chals.push({ id, ...fields }); made++; }
+    persistChallenge(id);
+  });
+  state.route.lastGen = { made, updated, live, n: picks.length };
+  render();
+}
+
 /* ---------- admin lock screen ---------- */
 let authError = false;
 let signingIn = false;
@@ -297,6 +446,7 @@ function renderHeader() {
     </div>
     <div style="flex:none;display:inline-flex;gap:4px;padding:4px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(140,165,200,.16);">
       <button data-action="tab" data-tab="chal" style="${tab(state.tab === 'chal')}">Challenges</button>
+      <button data-action="tab" data-tab="route" style="${tab(state.tab === 'route')}">Route data</button>
       <button data-action="tab" data-tab="logic" style="${tab(state.tab === 'logic')}">Reward logic</button>
     </div>
   </div>`;
@@ -432,6 +582,82 @@ function renderSidecar() {
       <span data-action="duplicate" style="cursor:pointer;${MONO}font-size:10px;letter-spacing:.1em;color:#3cc0e0;">DUPLICATE</span>
       <span data-action="archive" style="cursor:pointer;${MONO}font-size:10px;letter-spacing:.1em;color:#8b97a8;">ARCHIVE</span>
     </div>
+  </div>`;
+}
+
+function renderRouteTab() {
+  const R = state.route;
+  let stats = null, picks = [], allocated = 0;
+  if (R.data) {
+    stats = routeStats(R.data);
+    picks = allocateRewards(stats.hotspots, R.budget);
+    allocated = picks.reduce((a, p) => a + p.value, 0);
+  }
+  const BTN = `cursor:pointer;border:1px solid rgba(4,152,186,.45);background:rgba(4,152,186,.1);border-radius:10px;padding:10px 14px;${MONO}font-size:10.5px;letter-spacing:.1em;font-weight:700;color:#3cc0e0;`;
+  const GOLD = `cursor:pointer;border:none;border-radius:10px;padding:11px 14px;background:linear-gradient(180deg,#ffd95e,#f3ac10);${MONO}font-size:10.5px;letter-spacing:.1em;font-weight:700;color:#4a3205;`;
+  const chip = t => `<span style="display:inline-flex;padding:4px 9px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(140,165,200,.18);${MONO}font-size:9.5px;letter-spacing:.08em;color:#cdd6e2;">${t}</span>`;
+
+  const analysis = !stats ? `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:320px;text-align:center;gap:10px;">
+      <span class="msr" style="font-size:44px;color:#2c3a4d;">query_stats</span>
+      <div style="${COND}font-weight:600;font-size:17px;color:#7b8799;">No route data yet</div>
+      <div style="font-size:13px;color:#5f6e80;max-width:340px;">Load the Taipei demo route or paste a carrier export on the left — delay hotspots and proposed challenges appear here.</div>
+    </div>`
+    : `
+    <div style="${MONO}font-size:10px;letter-spacing:.16em;color:#8b97a8;">ROUTE ANALYSIS · ${esc(R.data.route)}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;">
+      ${chip(stats.days + ' DAYS')}${chip(stats.visits + ' STOP VISITS')}${chip(stats.locations + ' LOCATIONS')}
+      ${chip(`<span style="color:#ff9b9b;">${stats.delayed} RAN ≥${HOTSPOT_MIN_DELAY} MIN LATE (${Math.round(stats.delayed / stats.visits * 100)}%)</span>`)}
+    </div>
+    <div style="${MONO}font-size:10px;letter-spacing:.16em;color:#8b97a8;margin:20px 0 4px;">FRICTION HOTSPOTS · ${stats.hotspots.length}</div>
+    ${!stats.hotspots.length ? `<div style="font-size:13px;color:#5f6e80;padding:14px 0;">Everything ran close to plan — nothing to investigate.</div>`
+      : stats.hotspots.map((h, i) => {
+        const pick = picks.find(p => p.address === h.address);
+        const maxLost = stats.hotspots[0].lost || 1;
+        return `
+      <div style="display:flex;align-items:center;gap:14px;padding:13px 2px;border-bottom:1px solid rgba(140,165,200,.08);">
+        <span style="flex:none;width:26px;${MONO}font-size:11px;color:#5f6e80;">#${i + 1}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <span style="${COND}font-weight:600;font-size:15.5px;color:#eef2f7;">${esc(h.address)}</span>
+            ${h.area ? `<span style="${MONO}font-size:9px;letter-spacing:.08em;color:#5f6e80;">${esc(String(h.area).toUpperCase())}</span>` : ''}
+          </div>
+          <div style="${MONO}font-size:9.5px;letter-spacing:.06em;color:#8b97a8;margin-top:3px;">${h.n}× VISITED · AVG +${h.avg.toFixed(1)} MIN · <span style="color:#ff9b9b;">${h.lost.toFixed(0)} MIN LOST</span></div>
+          <div style="margin-top:6px;height:5px;border-radius:3px;background:rgba(255,255,255,.05);overflow:hidden;"><div style="height:100%;width:${Math.round(h.lost / maxLost * 100)}%;border-radius:3px;background:linear-gradient(90deg,#ff8f8f,#d63a3a);"></div></div>
+        </div>
+        ${pick
+          ? `<span style="flex:none;${MONO}font-size:11px;font-weight:700;color:#5fe0b4;background:rgba(95,224,180,.09);border:1px solid rgba(95,224,180,.35);border-radius:9px;padding:6px 10px;">${fmt(pick.value)}</span>`
+          : `<span style="flex:none;${MONO}font-size:9px;letter-spacing:.08em;color:#5f6e80;border:1px solid rgba(140,165,200,.2);border-radius:9px;padding:6px 10px;">OVER BUDGET</span>`}
+      </div>`;
+      }).join('')}
+    ${stats.hotspots.length ? `<div style="${MONO}font-size:9.5px;letter-spacing:.06em;color:#5f6e80;margin-top:12px;">${stats.locations - stats.hotspots.length} OTHER LOCATIONS RAN ON PLAN — NO CHALLENGE NEEDED</div>` : ''}`;
+
+  return `
+  <div style="margin-top:34px;display:grid;grid-template-columns:390px 1fr;gap:22px;align-items:start;">
+    <div style="display:grid;gap:22px;">
+      <div style="${CARD}padding:20px;">
+        <div style="${MONO}font-size:10px;letter-spacing:.16em;color:#8b97a8;">ROUTE DATA · INJECT</div>
+        <p style="margin:10px 0 14px;font-size:13px;color:#94a1b2;line-height:1.55;">The carrier sees <em>where</em> deliveries lose minutes — never <em>why</em>. Feed per-stop timings here; locations that keep running behind plan become investigation challenges on the people map.</p>
+        <button data-action="route-demo" style="${BTN}width:100%;">⚡ LOAD DEMO ROUTE · TAIPEI BEITOU</button>
+        <div style="${LABEL}margin-top:16px;">OR PASTE A CARRIER EXPORT (JSON)</div>
+        <textarea data-input="routejson" rows="8" spellcheck="false" placeholder="${esc(ROUTE_FMT)}" style="${FIELD}resize:vertical;${MONO}font-size:10px;line-height:1.55;">${esc(R.rawText)}</textarea>
+        <button data-action="route-parse" style="${BTN}width:100%;margin-top:9px;">ANALYZE PASTED DATA</button>
+        ${R.error ? `<div style="margin-top:9px;${MONO}font-size:10px;line-height:1.5;color:#ff8a7a;">${esc(R.error)}</div>` : ''}
+      </div>
+      <div style="${CARD}padding:20px;">
+        <div style="${MONO}font-size:10px;letter-spacing:.16em;color:#8b97a8;">ORCHESTRATION · BUDGET</div>
+        <div style="${LABEL}margin-top:14px;">ROUTE BUDGET (${state.logic.mode === 'points' ? 'P' : '€'} / WEEK)</div>
+        <input data-change="routebudget" type="number" min="5" step="5" value="${R.budget}" style="${FIELD}${MONO}font-size:14px;">
+        ${stats ? `<div style="${MONO}font-size:9.5px;letter-spacing:.06em;color:#8b97a8;margin-top:9px;">${fmt(allocated)} allocated across ${picks.length} of ${stats.hotspots.length} hotspots</div>` : ''}
+        <div style="display:grid;gap:9px;margin-top:14px;">
+          <button data-action="route-generate-live" style="${GOLD}${picks.length ? '' : 'opacity:.4;pointer-events:none;'}">GENERATE ${picks.length || ''} CHALLENGES → PUBLISH LIVE</button>
+          <button data-action="route-generate" style="${BTN}${picks.length ? '' : 'opacity:.4;pointer-events:none;'}">GENERATE AS DRAFTS FOR REVIEW</button>
+        </div>
+        ${R.lastGen ? `<div style="margin-top:12px;${MONO}font-size:10px;letter-spacing:.06em;color:#5fe0b4;">✓ ${R.lastGen.made} created · ${R.lastGen.updated} updated ${R.lastGen.live ? '— LIVE on the maps now' : '— drafts in the Challenges tab'}</div>` : ''}
+        <p style="margin:12px 0 0;font-size:12px;color:#5f6e80;line-height:1.5;">Re-running updates the same auto-challenges — no duplicates. Each needs ${2} independent on-site reports before its payout releases.</p>
+      </div>
+    </div>
+    <div style="${CARD}padding:20px 22px;">${analysis}</div>
   </div>`;
 }
 
@@ -576,7 +802,7 @@ function render() {
     ${renderTopbar()}
     <div style="max-width:1180px;margin:0 auto;padding:44px 40px 80px;">
       ${renderHeader()}
-      ${state.tab === 'chal' ? renderChallengesTab() : renderLogicTab()}
+      ${state.tab === 'chal' ? renderChallengesTab() : state.tab === 'route' ? renderRouteTab() : renderLogicTab()}
       <div style="margin-top:56px;${MONO}font-size:10px;letter-spacing:.14em;color:#4f5a69;">POSTNORD · REAL-WORLD INTELLIGENCE LAYER · REWARDS PILOT · PLANNER CONSOLE</div>
     </div>
   </div>`;
@@ -668,6 +894,26 @@ const clickActions = {
   },
   'mode-euro'() { state.logic.mode = 'euro'; persistLogic(); render(); },
   'mode-points'() { state.logic.mode = 'points'; persistLogic(); render(); },
+  'route-demo'() {
+    state.route.data = normalizeRoute(makeDemoRoute());
+    state.route.error = null;
+    state.route.lastGen = null;
+    render();
+  },
+  'route-parse'() {
+    const ta = root.querySelector('[data-input="routejson"]');
+    if (ta) state.route.rawText = ta.value;
+    try {
+      state.route.data = normalizeRoute(JSON.parse(state.route.rawText));
+      state.route.error = null;
+      state.route.lastGen = null;
+    } catch (e) {
+      state.route.error = (e && e.message) || 'Could not read that data.';
+    }
+    render();
+  },
+  'route-generate'() { generateAutoChallenges(false); },
+  'route-generate-live'() { generateAutoChallenges(true); },
   signout() { AUTH.signOut(); authError = false; render(); },
 };
 
@@ -687,6 +933,7 @@ const changeActions = {
   autoconf: v => { state.logic.autoConf = Math.min(100, num(v, true)); persistLogic(); render(); },
   phototier: v => { state.logic.photoTier = v; persistLogic(); render(); },
   budget: v => { state.logic.budget = num(v); persistLogic(); render(); },
+  routebudget: v => { state.route.budget = Math.max(AUTO_MIN_REWARD, num(v)); render(); },
 };
 
 root.addEventListener('click', e => {
@@ -705,6 +952,7 @@ root.addEventListener('input', e => {
     scheduleAddrLookup(e.target.value);
     updSel('addr', e.target.value);
   }
+  else if (key === 'routejson') state.route.rawText = e.target.value; /* no re-render while typing */
 });
 
 root.addEventListener('change', e => {

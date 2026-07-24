@@ -133,6 +133,28 @@ With `config.js` left empty, everything runs in **local demo mode**: hardcoded
 data, and the studio unlocks with the planner code **`1184`** (defined in
 `auth.js`). Demo mode's gate is browser-only and not real security.
 
+## Route data → automatic challenges
+
+The carrier's delivery data shows *where* stops run behind plan — never
+*why* (a broken elevator and a closed road both just look like lost
+minutes). The studio's **Route data** tab turns that signal into
+investigation challenges:
+
+1. **Inject** per-stop timings — paste a JSON export
+   (`{ route, days: [{ date, stops: [{ address, area, lat, lng,
+   planned_min, actual_min }] }] }`; adapt the real carrier feed to this
+   shape later), or click **Load demo route** for a simulated week of
+   deliveries through Beitou, Taipei with three engineered frictions.
+2. The system **aggregates delay per location** and ranks friction
+   hotspots (≥3 visits averaging ≥2 min behind plan).
+3. **Set a route budget** — it's split across hotspots in proportion to
+   the minutes they cost (€4–20 each); the worst offenders are funded
+   first and the tail waits when the budget is tight.
+4. **Generate** — as drafts for review or published LIVE at once. Each
+   auto-challenge carries the hotspot's address and coordinates, a
+   people-facing brief citing the measured slowdown, and the standard
+   2-report consensus. Re-running updates the same challenges in place.
+
 ## Investigation challenges (consensus payouts)
 
 Challenges published in Challenge Studio with an address appear on the
