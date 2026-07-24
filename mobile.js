@@ -711,14 +711,20 @@ function renderTagCard() {
     const away = geo && typeof obj.lat === 'number' ? distMeters(geo, obj) : Infinity;
     const rgb = solved ? '70,211,154' : '255,107,107';
     const tx = solved ? '#7ce0b8' : '#ff9b9b';
-    const BTN = "cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:7px 11px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;";
     const NOTE = "display:inline-flex;align-items:center;gap:5px;padding:7px 11px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;";
     const action = solved
       ? `<span style="${NOTE}background:rgba(70,211,154,.12);border:1px solid rgba(70,211,154,.4);color:#7ce0b8;"><span class="msr fill" style="font-size:13px;">paid</span>${escT(fmtReward(obj.value))} RELEASED TO ALL REPORTERS</span>`
       : mine
         ? `<span style="${NOTE}background:rgba(245,197,66,.1);border:1px solid rgba(245,197,66,.4);color:#ffe39a;"><span class="msr" style="font-size:13px;">hourglass_top</span>YOU REPORTED · WAITING FOR ${REPORTS_NEEDED - n} MORE</span>`
         : away <= REPORT_RADIUS
-          ? `<span data-action="chal-report" style="${BTN}background:linear-gradient(180deg,#aab6ff,#4458d8);border:1px solid rgba(255,255,255,.4);color:#fff;font-weight:700;"><span class="msr fill" style="font-size:13px;">mic</span>REPORT TO OTTO</span>`
+          ? `<div data-action="chal-report" style="cursor:pointer;flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:13px;background:linear-gradient(180deg,rgba(124,140,255,.13),rgba(68,88,216,.06));border:1px solid rgba(124,140,255,.34);">
+              <span style="flex:none;position:relative;width:34px;height:34px;background:linear-gradient(140deg,#aab6ff,#6a7bff 38%,#3cc0e0 80%,#0498BA);box-shadow:0 4px 12px rgba(68,88,216,.5),inset 0 3px 7px rgba(255,255,255,.3);border-radius:42% 58% 56% 44%/48% 42% 58% 52%;animation:blobmorph 8s ease-in-out infinite;display:flex;align-items:center;justify-content:center;gap:4px;pointer-events:none;">
+                <span style="position:relative;width:5px;height:7px;border-radius:50%;background:#fff;display:block;animation:blink 3.6s ease-in-out infinite;transform-origin:center;"><span style="position:absolute;left:1px;top:1px;width:2.2px;height:2.2px;border-radius:50%;background:#2a3a78;"></span></span>
+                <span style="position:relative;width:5px;height:7px;border-radius:50%;background:#fff;display:block;animation:blink 3.6s ease-in-out infinite;transform-origin:center;"><span style="position:absolute;left:1px;top:1px;width:2.2px;height:2.2px;border-radius:50%;background:#2a3a78;"></span></span>
+              </span>
+              <span style="flex:1;min-width:0;font-family:'Saira Semi Condensed',sans-serif;font-weight:700;font-size:14.5px;color:#eef2f7;line-height:1.12;pointer-events:none;">&ldquo;What&rsquo;s going on here? Tap and tell me.&rdquo;</span>
+              <span style="flex:none;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:rgba(124,140,255,.14);border:1px solid rgba(124,140,255,.4);pointer-events:none;"><span class="msr fill" style="font-size:18px;color:#b3bcff;">mic</span></span>
+            </div>`
           : `<span style="${NOTE}background:rgba(255,255,255,.05);border:1px solid rgba(140,165,200,.2);color:#8b97a8;"><span class="msr" style="font-size:13px;">near_me</span>GET WITHIN ${REPORT_RADIUS} M TO REPORT</span>`;
     card.innerHTML = `
     <div style="display:flex;align-items:flex-start;gap:12px;">
