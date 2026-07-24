@@ -54,3 +54,46 @@ a[title="Planner sign-in"]:hover img { border-color: #3cc0e0 !important; }
 a.stop-link { color: #eef2f7; }
 a.stop-link:hover { color: #3cc0e0; }
 a.stop-link:hover .stop-peek { opacity: 1 !important; }
+
+/* ============================================================
+ * Responsive · driver rewards app (index.html / app.js)
+ * app.js lays out with inline styles, so these phone/tablet
+ * overrides use !important to win. Class hooks live in app.js.
+ * ============================================================ */
+
+@media (max-width: 980px) {
+  .rw-grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .rw-zones-grid, .rw-cashout-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .rw-banner { flex-wrap: wrap; }
+  .rw-banner-cta { width: 100% !important; }
+}
+
+@media (max-width: 680px) {
+  .rw-shell { padding: 28px 16px 64px !important; }
+  .rw-grid3 { grid-template-columns: minmax(0, 1fr) !important; }
+
+  /* topbar: brand + balance on the first row, nav tabs on their own row */
+  .rw-topnav { flex-wrap: wrap; height: auto !important; padding: 10px 14px !important; gap: 12px !important; }
+  .rw-nav { order: 3; flex-basis: 100%; justify-content: space-between !important; gap: 8px !important; padding: 2px 2px 6px; }
+  .rw-navside { margin-left: auto; }
+
+  /* dashboard hero stacks */
+  .rw-hero { flex-direction: column !important; align-items: stretch !important; gap: 26px !important; }
+  .rw-hero-side { width: 100% !important; }
+  .rw-balance { font-size: 46px !important; }
+  .rw-h1 { font-size: 32px !important; }
+  .rw-pagehead { flex-wrap: wrap; }
+
+  /* featured banner becomes a column card */
+  .rw-banner { padding: 20px 18px !important; gap: 18px !important; }
+  .rw-banner-img { width: 100% !important; }
+
+  /* dashboard zone rows: name on top, progress below */
+  .rw-zonerow { flex-wrap: wrap; row-gap: 8px; }
+  .rw-zname { width: 100% !important; }
+  .rw-zboost { width: auto !important; text-align: left !important; }
+}
+
+/* the rewards app flows down to phone widths; the studio keeps its
+ * desktop floor (both share this stylesheet) */
+body.rw { min-width: 320px; }

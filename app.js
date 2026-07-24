@@ -348,17 +348,17 @@ function renderTopbar(vm) {
   };
   return `
   <div style="position:sticky;top:0;z-index:50;background:rgba(7,13,22,.85);backdrop-filter:blur(10px);border-bottom:1px solid rgba(140,165,200,.1);">
-    <div style="max-width:1120px;margin:0 auto;padding:0 40px;height:64px;display:flex;align-items:center;gap:22px;">
-      <div style="display:flex;align-items:center;gap:12px;flex:none;">
+    <div class="rw-topnav" style="max-width:1120px;margin:0 auto;padding:0 40px;height:64px;display:flex;align-items:center;gap:22px;">
+      <div class="rw-logo" style="display:flex;align-items:center;gap:12px;flex:none;">
         <span style="${MONO}font-size:10px;letter-spacing:.18em;color:#6f7c8e;">REWARDS</span>
       </div>
-      <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:30px;">
+      <div class="rw-nav" style="flex:1;display:flex;align-items:center;justify-content:center;gap:30px;">
         ${nav('dashboard', 'Dashboard')}
         ${nav('challenges', 'Challenges')}
         ${nav('zones', 'Zones')}
         ${nav('cashout', 'Cashout')}
       </div>
-      <div style="display:flex;align-items:center;gap:14px;flex:none;">
+      <div class="rw-navside" style="display:flex;align-items:center;gap:14px;flex:none;">
         <span style="${MONO}font-size:13px;font-weight:700;color:#5fe0b4;">${vm.balanceLabel}</span>
         <a href="challenge-studio.html" title="Planner sign-in" style="position:relative;width:34px;height:34px;flex:none;display:block;">
           <img src="assets/profile.png" alt="M. Kaur" style="width:34px;height:34px;border-radius:50%;object-fit:cover;display:block;border:1.5px solid rgba(140,165,200,.35);transition:border-color .15s ease;">
@@ -395,13 +395,13 @@ function renderFeaturedCard(c) {
 function renderDashboard(vm) {
   return `
   <div>
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:40px;">
+    <div class="rw-hero" style="display:flex;align-items:flex-end;justify-content:space-between;gap:40px;">
       <div>
         <div style="${MONO}font-size:11px;letter-spacing:.2em;color:#6f7c8e;margin-bottom:14px;">SEASON 3 · M. KAUR · DE-1184</div>
-        <div style="${COND}font-weight:700;font-size:64px;line-height:.95;letter-spacing:-0.01em;color:#7ce0b8;">${vm.balanceLabel}</div>
+        <div class="rw-balance" style="${COND}font-weight:700;font-size:64px;line-height:.95;letter-spacing:-0.01em;color:#7ce0b8;">${vm.balanceLabel}</div>
         <div style="margin-top:10px;font-size:14.5px;color:#94a1b2;">Your balance from field reporting. ${vm.heroNote}</div>
       </div>
-      <div style="width:360px;flex:none;padding-bottom:6px;">
+      <div class="rw-hero-side" style="width:360px;flex:none;padding-bottom:6px;">
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px;">
           <span style="${MONO}font-size:10px;letter-spacing:.16em;color:#8b97a8;">NEXT CASHOUT</span>
           <span style="${MONO}font-size:11px;color:#6f7c8e;">${vm.targetLabel} MIN</span>
@@ -436,21 +436,21 @@ function renderDashboard(vm) {
         <span style="${COND}font-weight:700;font-size:22px;">Live challenges</span>
         <span data-action="nav" data-page="challenges" style="margin-left:auto;cursor:pointer;${MONO}font-size:11px;letter-spacing:.08em;color:#3cc0e0;">VIEW ALL →</span>
       </div>
-      ${vm.featured.length ? `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;">
+      ${vm.featured.length ? `<div class="rw-grid3" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;">
         ${vm.featured.map(renderFeaturedCard).join('')}
       </div>` : `<div style="${CARD}padding:26px;font-size:13.5px;color:#7b8799;">No live challenges right now — check back soon.</div>`}
     </div>
 
     <div style="margin-top:56px;">
-      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:18px;">
+      <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:14px;margin-bottom:18px;">
         <span style="${COND}font-weight:700;font-size:22px;">Explore the city</span>
         <span style="${MONO}font-size:11px;color:#6f7c8e;">ZONE MASTERY · BERLIN NORD</span>
         <span data-action="nav" data-page="zones" style="margin-left:auto;cursor:pointer;${MONO}font-size:11px;letter-spacing:.08em;color:#3cc0e0;">VIEW ALL →</span>
       </div>
       <div style="${CARD}overflow:hidden;">
         ${vm.zonesHome.map(z => `
-        <div style="${z.rowStyle}">
-          <div style="width:230px;flex:none;">
+        <div class="rw-zonerow" style="${z.rowStyle}">
+          <div class="rw-zname" style="width:230px;flex:none;">
             <span style="${COND}font-weight:600;font-size:16px;">${z.name}</span>
             <span style="margin-left:9px;${MONO}font-size:10px;letter-spacing:.1em;color:#6f7c8e;">${z.code}</span>
           </div>
@@ -458,7 +458,7 @@ function renderDashboard(vm) {
             <div style="flex:1;height:5px;border-radius:3px;background:rgba(140,165,200,.14);overflow:hidden;"><div style="height:100%;width:${z.pctW};border-radius:3px;background:linear-gradient(90deg,#0f6d8c,#3cc0e0);"></div></div>
             <span style="width:38px;flex:none;text-align:right;${MONO}font-size:11px;color:#8b97a8;">${z.pctLabel}</span>
           </div>
-          <div style="width:120px;flex:none;text-align:center;">
+          <div class="rw-zboost" style="width:120px;flex:none;text-align:center;">
             ${z.boosted ? `<span style="display:inline-flex;align-items:center;gap:4px;${MONO}font-size:11px;font-weight:700;color:#ffd95e;">${icon('bolt', 13, null, true)}×2 XP</span>` : ''}
           </div>
           <span data-action="open-zone" data-id="${z.id}" style="flex:none;cursor:pointer;display:inline-flex;align-items:center;gap:5px;${MONO}font-size:10.5px;letter-spacing:.08em;color:#3cc0e0;">OPEN${icon('arrow_forward', 14)}</span>
@@ -471,7 +471,7 @@ function renderDashboard(vm) {
         <span style="${COND}font-weight:700;font-size:22px;">Spend it</span>
         <span style="${MONO}font-size:11px;color:#6f7c8e;">REWARDS COME OFF YOUR BALANCE</span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;">
+      <div class="rw-grid3" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;">
         ${vm.shop.map(t => `
         <div class="card-hover-gold" style="display:flex;flex-direction:column;${CARD}padding:24px;">
           <span style="width:42px;height:42px;border-radius:12px;background:rgba(245,197,66,.12);display:flex;align-items:center;justify-content:center;margin-bottom:16px;">${icon(t.icon, 22, '#ffd95e', true)}</span>
@@ -532,7 +532,7 @@ function renderSpecialBanner(vm) {
     controls = `<div style="margin-top:18px;display:flex;align-items:center;gap:7px;${MONO}font-size:11px;letter-spacing:.08em;color:#5fe0b4;">${icon('check_circle', 16, null, true)}PAID INTO BALANCE</div>`;
   }
   return `
-  <div style="margin-top:34px;position:relative;overflow:hidden;border:1px solid rgba(245,197,66,.3);border-radius:18px;background:linear-gradient(115deg,rgba(245,197,66,.12),rgba(12,20,32,.55) 58%);padding:28px 32px;display:flex;align-items:center;gap:44px;">
+  <div class="rw-banner" style="margin-top:34px;position:relative;overflow:hidden;border:1px solid rgba(245,197,66,.3);border-radius:18px;background:linear-gradient(115deg,rgba(245,197,66,.12),rgba(12,20,32,.55) 58%);padding:28px 32px;display:flex;align-items:center;gap:44px;">
     <div style="flex:1;min-width:0;">
       <div style="display:flex;align-items:center;gap:10px;">
         <span style="${sp.tierStyle}">${sp.tier}</span>
@@ -542,13 +542,13 @@ function renderSpecialBanner(vm) {
       <div style="margin-top:8px;max-width:520px;font-size:14px;line-height:1.55;color:#94a1b2;">${sp.desc}</div>
       <div style="margin-top:10px;${MONO}font-size:10px;letter-spacing:.12em;color:#8b97a8;">${sp.meta}</div>
     </div>
-    <div style="position:relative;width:238px;height:150px;flex:none;border-radius:12px;overflow:hidden;border:1px solid rgba(245,197,66,.3);background:${sp.sky};">
+    <div class="rw-banner-img" style="position:relative;width:238px;height:150px;flex:none;border-radius:12px;overflow:hidden;border:1px solid rgba(245,197,66,.3);background:${sp.sky};">
       ${scenery(sp, { glow: '.15', mid: false, dash: false })}
       ${svOverlay(sp)}
       ${addrChip(sp, 'left:10px;top:10px')}
       ${streetViewCredit('right:10px;bottom:8px')}
     </div>
-    <div style="width:280px;flex:none;">
+    <div class="rw-banner-cta" style="width:280px;flex:none;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;">
         <span style="${COND}font-weight:700;font-size:34px;color:#7ce0b8;">${sp.rewardLabel}</span>
         <span style="${MONO}font-size:11px;letter-spacing:.1em;font-weight:700;color:#ffd95e;">${sp.xpLabel}</span>
@@ -562,9 +562,9 @@ function renderChallenges(vm) {
   return `
   <div>
     <div style="${MONO}font-size:11px;letter-spacing:.2em;color:#6f7c8e;margin-bottom:14px;">SEASON 3 · BERLIN NORD HUB</div>
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:30px;">
+    <div class="rw-pagehead" style="display:flex;align-items:flex-end;justify-content:space-between;gap:30px;">
       <div>
-        <h1 style="margin:0;${COND}font-weight:700;font-size:44px;line-height:1;">Challenges</h1>
+        <h1 class="rw-h1" style="margin:0;${COND}font-weight:700;font-size:44px;line-height:1;">Challenges</h1>
         <p style="margin:10px 0 0;font-size:14.5px;color:#94a1b2;max-width:560px;">Structured field work that pays extra — pick one, it tracks automatically while you drive. Snapshots stream in from Google Maps &amp; Street View.</p>
       </div>
       <div style="flex:none;text-align:right;padding-bottom:4px;">
@@ -572,7 +572,7 @@ function renderChallenges(vm) {
       </div>
     </div>
     ${vm.sp ? renderSpecialBanner(vm) : ''}
-    ${vm.challenges.length ? `<div style="margin-top:18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;">
+    ${vm.challenges.length ? `<div class="rw-grid3" style="margin-top:18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;">
       ${vm.challenges.map(renderChallengeCard).join('')}
     </div>` : (vm.sp ? '' : `<div style="margin-top:18px;${CARD}padding:26px;font-size:13.5px;color:#7b8799;">No live challenges right now — check back soon.</div>`)}
   </div>`;
@@ -583,13 +583,13 @@ function renderZones(vm) {
   return `
   <div>
     <div style="${MONO}font-size:11px;letter-spacing:.2em;color:#6f7c8e;margin-bottom:14px;">BERLIN NORD HUB · 6 ZONES</div>
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:30px;">
+    <div class="rw-pagehead" style="display:flex;align-items:flex-end;justify-content:space-between;gap:30px;">
       <div>
-        <h1 style="margin:0;${COND}font-weight:700;font-size:44px;line-height:1;">Explore the city</h1>
+        <h1 class="rw-h1" style="margin:0;${COND}font-weight:700;font-size:44px;line-height:1;">Explore the city</h1>
         <p style="margin:10px 0 0;font-size:14.5px;color:#94a1b2;max-width:560px;">Master a zone by keeping its stops verified. Boosted zones pay double XP this week.</p>
       </div>
     </div>
-    <div style="margin-top:34px;display:grid;grid-template-columns:360px minmax(0,1fr);gap:18px;align-items:start;">
+    <div class="rw-zones-grid" style="margin-top:34px;display:grid;grid-template-columns:360px minmax(0,1fr);gap:18px;align-items:start;">
       <div style="${CARD}overflow:hidden;">
         ${vm.zoneList.map(z => `
         <div data-action="select-zone" data-id="${z.id}" style="${z.rowStyle}">
@@ -644,13 +644,13 @@ function renderCashout(vm) {
   return `
   <div>
     <div style="${MONO}font-size:11px;letter-spacing:.2em;color:#6f7c8e;margin-bottom:14px;">SEASON 3 · M. KAUR · DE-1184</div>
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:30px;">
+    <div class="rw-pagehead" style="display:flex;align-items:flex-end;justify-content:space-between;gap:30px;">
       <div>
-        <h1 style="margin:0;${COND}font-weight:700;font-size:44px;line-height:1;">Cashout</h1>
+        <h1 class="rw-h1" style="margin:0;${COND}font-weight:700;font-size:44px;line-height:1;">Cashout</h1>
         <p style="margin:10px 0 0;font-size:14.5px;color:#94a1b2;max-width:560px;">Move your reward balance where you want it. ${vm.heroNote}</p>
       </div>
     </div>
-    <div style="margin-top:34px;display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:18px;align-items:start;">
+    <div class="rw-cashout-grid" style="margin-top:34px;display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:18px;align-items:start;">
       <div style="${CARD}padding:28px;">
         <div style="${MONO}font-size:10px;letter-spacing:.16em;color:#8b97a8;">AVAILABLE BALANCE</div>
         <div style="margin-top:10px;${COND}font-weight:700;font-size:54px;line-height:.95;color:#7ce0b8;">${vm.balanceLabel}</div>
@@ -714,7 +714,7 @@ function render() {
   root.innerHTML = `
   <div style="min-height:100vh;">
     ${renderTopbar(vm)}
-    <div style="max-width:1120px;margin:0 auto;padding:52px 40px 80px;">
+    <div class="rw-shell" style="max-width:1120px;margin:0 auto;padding:52px 40px 80px;">
       ${pages[vm.page](vm)}
       <div style="margin-top:56px;${MONO}font-size:10px;letter-spacing:.14em;color:#4f5a69;">POSTNORD · REAL-WORLD INTELLIGENCE LAYER · REWARDS PILOT · BERLIN NORD · <a href="mobile.html" style="color:#4f5a69;">MOBILE APP →</a>${typeof AUTH !== 'undefined' && AUTH.isAdmin() ? ' · <a href="challenge-studio.html" style="color:#3cc0e0;">PLANNER CONSOLE →</a>' : ''}</div>
     </div>
