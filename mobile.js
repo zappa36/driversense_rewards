@@ -694,6 +694,10 @@ function renderTagCard() {
   const card = document.getElementById('tag-card');
   if (!card) return;
   const obj = tagSelObj();
+  /* one Otto entry point at a time: the always-on bar steps aside while a
+   * tag card (with its own report/retell actions) is open */
+  const bar = document.getElementById('otto-bar');
+  if (bar) bar.style.display = obj ? 'none' : 'flex';
   if (!obj) {
     tagSel = null; tagEdit = false; tagDelArmed = false;
     card.style.display = 'none'; card.innerHTML = '';
