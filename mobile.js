@@ -301,7 +301,7 @@ function ottoStart() {
     const c = voice.challenge;
     const t = voice.editing;
     renderOttoLive({ from: 'ai', text: c
-      ? `You're at ${c.addr || c.title}. Deliveries here run slower than planned — what's going on? Tap the mic and describe what you see.`
+      ? `You're at ${c.addr || c.title}. Something around here isn't working the way it should — can you take a look? Tap the mic and describe what you see.`
       : t
         ? `Let's update your tag "${t.title || t.transcript || 'voice tip'}" — tap the mic and tell me the new situation.`
         : `Hey M. Kaur — you're at ${placeLabel()}. What did you find? Tap the mic and just talk.` }, 'idle');
