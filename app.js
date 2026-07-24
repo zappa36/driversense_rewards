@@ -144,6 +144,7 @@ const fmt = v => props.payoutMode === 'points' ? Math.round(v * 100) + ' P' : '�
 
 /* Google Maps / Street View URLs */
 const svPanoUrl = (lat, lng) => `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+const navDirUrl = (lat, lng) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
 const mapSearchUrl = q => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q + ', Berlin')}`;
 const svImageUrl = c => GMAPS_KEY
   ? `https://maps.googleapis.com/maps/api/streetview?size=640x300&location=${encodeURIComponent(c.svLoc || c.addr + ', Berlin')}&fov=80&key=${GMAPS_KEY}`
@@ -331,7 +332,8 @@ function chalControls(c) {
         ${progressFill('chal-' + c.id, c.progW, 'linear-gradient(90deg,#0f6d8c,#3cc0e0)', '.6s', 30)}
       </div>
       <span style="${MONO}font-size:11px;font-weight:700;color:#3cc0e0;">${c.progLabel}</span>
-    </div>`;
+    </div>
+    ${c.lat != null && c.lng != null ? `<a href="${navDirUrl(c.lat, c.lng)}" target="_blank" rel="noopener" style="margin-top:9px;display:inline-flex;align-items:center;gap:5px;${MONO}font-size:10px;letter-spacing:.08em;color:#3cc0e0;">${icon('navigation', 12, '#3cc0e0', true)}NAVIGATE</a>` : ''}`;
   }
   if (c.showClaim) {
     return `<button data-action="claim-chal" data-id="${c.id}" class="hover-lift" style="display:block;width:100%;margin-top:12px;padding:10px;border-radius:10px;border:none;background:linear-gradient(180deg,#63dfae,#2fae7d);${COND}font-weight:700;font-size:13px;letter-spacing:.06em;color:#05231a;cursor:pointer;box-shadow:0 10px 22px -10px rgba(47,174,125,.6);">CLAIM ${c.rewardLabel}</button>`;
@@ -525,7 +527,7 @@ function renderSpecialBanner(vm) {
         </div>
         <span style="${MONO}font-size:12px;font-weight:700;color:#ffd95e;">${sp.progLabel}</span>
       </div>
-      <div style="margin-top:7px;${MONO}font-size:9.5px;letter-spacing:.14em;color:#8b97a8;">TRACKING LIVE ON YOUR ROUTE</div>`;
+      <div style="margin-top:7px;${MONO}font-size:9.5px;letter-spacing:.14em;color:#8b97a8;">TRACKING LIVE ON YOUR ROUTE${sp.lat != null && sp.lng != null ? ` · <a href="${navDirUrl(sp.lat, sp.lng)}" target="_blank" rel="noopener" style="color:#ffd95e;">NAVIGATE ↗</a>` : ''}</div>`;
   } else if (sp.showClaim) {
     controls = `<button data-action="claim-chal" data-id="${sp.id}" class="hover-lift" style="display:block;width:100%;margin-top:14px;padding:12px;border-radius:11px;border:none;background:linear-gradient(180deg,#63dfae,#2fae7d);${COND}font-weight:700;font-size:14px;letter-spacing:.06em;color:#05231a;cursor:pointer;box-shadow:0 12px 26px -12px rgba(47,174,125,.6);">CLAIM ${sp.rewardLabel}</button>`;
   } else {
@@ -763,6 +765,12 @@ const actions = {
     if (state.started[d.id]) return;
     state.started[d.id] = true;
     state.prog[d.id] = state.prog[d.id] || 0;
+    const c = ALL_CHALLENGES[d.id];
+    if (c && c.lat != null && c.lng != null) {
+      /* hand off to turn-by-turn — on phones this opens the Google Maps
+       * app in navigation mode while the challenge tracks in background */
+      window.open(navDirUrl(c.lat, c.lng), '_blank', 'noopener');
+    }
     render();
     tickChal(d.id);
   },

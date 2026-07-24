@@ -725,7 +725,8 @@ function renderTagCard() {
               <span style="flex:1;min-width:0;font-family:'Saira Semi Condensed',sans-serif;font-weight:700;font-size:14.5px;color:#eef2f7;line-height:1.12;pointer-events:none;">&ldquo;What&rsquo;s going on here? Tap and tell me.&rdquo;</span>
               <span style="flex:none;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:rgba(124,140,255,.14);border:1px solid rgba(124,140,255,.4);pointer-events:none;"><span class="msr fill" style="font-size:18px;color:#b3bcff;">mic</span></span>
             </div>`
-          : `<span style="${NOTE}background:rgba(255,255,255,.05);border:1px solid rgba(140,165,200,.2);color:#8b97a8;"><span class="msr" style="font-size:13px;">near_me</span>GET WITHIN ${REPORT_RADIUS} M TO REPORT</span>`;
+          : `<span style="${NOTE}background:rgba(255,255,255,.05);border:1px solid rgba(140,165,200,.2);color:#8b97a8;"><span class="msr" style="font-size:13px;">near_me</span>GET WITHIN ${REPORT_RADIUS} M TO REPORT</span>
+             <a href="https://www.google.com/maps/dir/?api=1&destination=${obj.lat},${obj.lng}&travelmode=walking" target="_blank" rel="noopener" style="${NOTE}background:rgba(124,140,255,.12);border:1px solid rgba(124,140,255,.4);color:#aab6ff;text-decoration:none;cursor:pointer;"><span class="msr fill" style="font-size:13px;">navigation</span>ROUTE</a>`;
     card.innerHTML = `
     <div style="display:flex;align-items:flex-start;gap:12px;">
       <div style="flex:none;width:44px;height:44px;border-radius:13px;background:linear-gradient(180deg,rgba(${rgb},.25),rgba(${rgb},.08));border:1px solid rgba(${rgb},.45);display:flex;align-items:center;justify-content:center;">
